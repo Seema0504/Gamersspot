@@ -1,5 +1,5 @@
-import { getDbClient, closeDbClient } from './db.js';
-import { withAuth } from './middleware/authMiddleware.js';
+import { getDbClient, closeDbClient } from './_lib/db.js';
+import { withAuth } from './_lib/middleware/authMiddleware.js';
 
 async function handler(req, res) {
   // Set CORS (handled by server.js largely, but good backup)
@@ -62,6 +62,55 @@ async function handler(req, res) {
       }));
 
       return res.status(200).json(stations);
+    }
+
+    // POST /api/stations?action=transfer
+    if (req.method === 'POST' && req.query.action === 'transfer') {
+      const { fromStationId, toStationId } = req.body;
+      if (!fromStationId || !toStationId) return res.status(400).json({ error: 'Source and target IDs required' });
+
+      await client.query('BEGIN');
+      try {
+        const stationsRes = await client.query(
+          `SELECT * FROM stations WHERE id IN ($1, $2) AND shop_id = $3 FOR UPDATE`,
+          [fromStationId, toStationId, shopId]
+        );
+        const fromStation = stationsRes.rows.find(s => s.id == fromStationId);
+        const toStation = stationsRes.rows.find(s => s.id == toStationId);
+
+        if (!fromStation) throw new Error('Source station not found');
+        if (!toStation) throw new Error('Target station not found');
+        if (!fromStation.is_running) throw new Error('Source station is not running');
+        if (toStation.is_running || toStation.elapsed_time > 0 || toStation.is_paused) throw new Error('Target station is not idle');
+        if (fromStation.game_type !== toStation.game_type) throw new Error('Game type mismatch');
+
+        // Move Data
+        await client.query(`UPDATE stations SET
+          is_running=$1, is_done=$2, is_paused=$3, paused_time=$4, pause_start_time=$5, elapsed_time=$6,
+          start_time=$7, end_time=$8, snacks=$9, snacks_enabled=$10, extra_controllers=$11,
+          customer_name=$12, customer_phone=$13
+          WHERE id=$14 AND shop_id=$15`,
+          [fromStation.is_running, fromStation.is_done, fromStation.is_paused, fromStation.paused_time, fromStation.pause_start_time,
+          fromStation.elapsed_time, fromStation.start_time, fromStation.end_time, fromStation.snacks, fromStation.snacks_enabled,
+          fromStation.extra_controllers, fromStation.customer_name, fromStation.customer_phone, toStationId, shopId]
+        );
+
+        // Reset Source
+        await client.query(`UPDATE stations SET
+          is_running=false, is_done=false, is_paused=false, paused_time=0, pause_start_time=NULL, elapsed_time=0,
+          start_time=NULL, end_time=NULL, snacks='{}'::jsonb, snacks_enabled=false, extra_controllers=0,
+          customer_name='', customer_phone=''
+          WHERE id=$1 AND shop_id=$2`,
+          [fromStationId, shopId]
+        );
+
+        await client.query('COMMIT');
+        return res.status(200).json({ success: true, from: fromStationId, to: toStationId });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Transfer failed:', err);
+        return res.status(400).json({ error: err.message });
+      }
     }
 
     // POST /api/stations (Bulk Update/Sync)

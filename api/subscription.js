@@ -1,5 +1,5 @@
-import { getDbClient, closeDbClient } from './db.js';
-import { authenticateToken } from './middleware/authMiddleware.js';
+import { getDbClient, closeDbClient } from './_lib/db.js';
+import { authenticateToken } from './_lib/middleware/authMiddleware.js';
 
 async function handler(req, res) {
     // CORS

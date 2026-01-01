@@ -108,7 +108,7 @@ export const stationsAPI = {
   },
 
   async transfer(fromStationId, toStationId) {
-    const response = await authorizedFetch('/stations/transfer', {
+    const response = await authorizedFetch('/stations?action=transfer', {
       method: 'POST',
       body: JSON.stringify({ fromStationId, toStationId }),
     });

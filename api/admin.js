@@ -1,5 +1,5 @@
-import { getDbClient, closeDbClient } from './db.js';
-import { withAuth, authorizeRoles } from './middleware/authMiddleware.js';
+import { getDbClient, closeDbClient } from './_lib/db.js';
+import { withAuth, authorizeRoles } from './_lib/middleware/authMiddleware.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 

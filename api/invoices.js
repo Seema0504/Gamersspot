@@ -1,5 +1,5 @@
-import { getDbClient, closeDbClient } from './db.js';
-import { withAuth } from './middleware/authMiddleware.js';
+import { getDbClient, closeDbClient } from './_lib/db.js';
+import { withAuth } from './_lib/middleware/authMiddleware.js';
 
 async function handler(req, res) {
   const allowedOrigin = process.env.CORS_ORIGIN || '*';

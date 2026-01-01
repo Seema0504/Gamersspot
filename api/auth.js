@@ -1,8 +1,8 @@
-import { getDbClient } from './db.js';
+import { getDbClient } from './_lib/db.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { requireActiveSubscription } from './middleware/authMiddleware.js';
+import { requireActiveSubscription } from './_lib/middleware/authMiddleware.js';
 
 const ENV_SECRET = process.env.JWT_SECRET;
 
