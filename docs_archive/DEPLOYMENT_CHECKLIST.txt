@@ -1,0 +1,229 @@
+VERCEL PREVIEW DEPLOYMENT CHECKLIST
+====================================
+
+Follow these steps to deploy to Vercel preview environment with Supabase test database.
+
+PREREQUISITES
+-------------
+✓ Supabase test database created
+✓ All code changes committed to Git
+✓ Vercel project connected to GitHub repository
+
+
+STEP-BY-STEP DEPLOYMENT GUIDE
+==============================
+
+STEP 1: PREPARE SUPABASE TEST DATABASE
+---------------------------------------
+
+1.1. Get your Supabase Test Database URL
+   - Go to Supabase Dashboard
+   - Select your TEST project
+   - Go to Settings → Database
+   - Copy the "Connection String" (URI format)
+   - It should look like: postgresql://postgres:[password]@[host]:5432/postgres
+
+1.2. Add to .env.local (for local testing)
+   
+   TEST_POSTGRES_URL="your-supabase-test-connection-string"
+
+1.3. Run the migration script
+   
+   node scripts/migrate-to-test-db.mjs
+
+   Expected output:
+   ✅ bonus_config table created
+   ✅ Extra controller rate set to ₹50
+   ✅ Billing buffer time set to 10 minutes
+   ✅ admin_users table created
+
+
+STEP 2: CONFIGURE VERCEL ENVIRONMENT VARIABLES
+-----------------------------------------------
+
+2.1. Go to Vercel Dashboard
+   - Open your project
+   - Go to Settings → Environment Variables
+
+2.2. Add TEST_POSTGRES_URL for Preview environment
+   
+   Variable Name: TEST_POSTGRES_URL
+   Value: [Your Supabase Test Connection String]
+   Environment: Preview (ONLY)
+   
+   ⚠️ IMPORTANT: Select ONLY "Preview" environment!
+
+2.3. Verify POSTGRES_URL for Production
+   
+   Variable Name: POSTGRES_URL
+   Value: [Your Supabase Production Connection String]
+   Environment: Production (ONLY)
+   
+   ⚠️ Make sure this is set to Production ONLY!
+
+
+STEP 3: COMMIT AND PUSH CHANGES
+--------------------------------
+
+3.1. Check Git status
+   
+   git status
+
+3.2. Add all changes
+   
+   git add .
+
+3.3. Commit with descriptive message
+   
+   git commit -m "feat: Add dynamic pricing, bonus time, and authentication
+   
+   - Implemented dynamic extra controller rate configuration
+   - Added configurable billing buffer time
+   - Created dynamic bonus time system per game type
+   - Implemented authentication with login/logout
+   - Fixed bonus time billing calculation
+   - Improved UI (DONE badge positioning)
+   - Added database migration scripts"
+
+3.4. Push to Test branch (triggers Vercel preview)
+   
+   git push origin Test
+
+
+STEP 4: VERIFY VERCEL DEPLOYMENT
+---------------------------------
+
+4.1. Check Vercel Dashboard
+   - Go to Deployments tab
+   - Wait for preview deployment to complete
+   - Should show "Ready" status
+
+4.2. Click on the preview URL
+   - Format: https://your-app-git-test-username.vercel.app
+
+4.3. Test the deployment
+   - Login with: admin / admin2026
+   - Check if all features work
+   - Test pricing configuration
+   - Test bonus time configuration
+   - Create a test station and verify billing
+
+
+STEP 5: VERIFY DATABASE CONNECTION
+-----------------------------------
+
+5.1. Check browser console for errors
+   - Open DevTools (F12)
+   - Look for database connection errors
+
+5.2. Test database operations
+   - Create a station
+   - Start/stop timer
+   - Generate an invoice
+   - Check if data persists
+
+5.3. Verify in Supabase
+   - Go to Supabase Dashboard
+   - Check Table Editor
+   - Verify data is being saved
+
+
+TROUBLESHOOTING
+===============
+
+Issue: "Failed to connect to database"
+Solution: 
+  - Check TEST_POSTGRES_URL is correct
+  - Verify it's set for Preview environment in Vercel
+  - Check Supabase database is running
+
+Issue: "Admin user not found"
+Solution:
+  - Run migration script again
+  - Check admin_users table in Supabase
+
+Issue: "Pricing rules not found"
+Solution:
+  - Run migration script again
+  - Verify pricing_rules table has extra_controller and buffer_minutes entries
+
+Issue: "Bonus configuration not working"
+Solution:
+  - Check bonus_config table exists
+  - Verify config_data JSONB is populated
+
+
+ROLLBACK PLAN
+=============
+
+If deployment fails:
+
+1. Go to Vercel Dashboard
+2. Find the last working deployment
+3. Click "..." → "Promote to Production"
+4. Or: git revert [commit-hash] and push
+
+
+POST-DEPLOYMENT VERIFICATION
+=============================
+
+✓ Login works (admin / admin2026)
+✓ Stations can be created
+✓ Timers work correctly
+✓ Billing calculations are accurate
+✓ Bonus time is applied correctly
+✓ Pricing configuration saves
+✓ Bonus time configuration saves
+✓ Invoices generate correctly
+✓ Reports display data
+
+
+MIGRATION SCRIPT DETAILS
+=========================
+
+The migration script (migrate-to-test-db.mjs) creates:
+
+1. bonus_config table
+   - Stores bonus time configuration per game type
+   - Default: 15/30/60 min for weekdays, varies by game type for weekends
+
+2. pricing_rules entries
+   - extra_controller: ₹50
+   - buffer_minutes: 10 minutes
+
+3. admin_users table
+   - Default user: admin / admin2026
+   - Password is hashed with SHA-256
+
+
+NEXT STEPS AFTER SUCCESSFUL PREVIEW
+====================================
+
+1. Test thoroughly in preview environment
+2. Fix any issues found
+3. Commit fixes and push again
+4. Once stable, merge Test branch to main
+5. Deploy to production
+
+
+IMPORTANT NOTES
+===============
+
+⚠️ Preview uses TEST database (TEST_POSTGRES_URL)
+⚠️ Production uses PRODUCTION database (POSTGRES_URL)
+⚠️ Never mix these two!
+⚠️ Always test in preview before production
+⚠️ Keep backup of production database
+
+
+CONTACT & SUPPORT
+=================
+
+If you encounter issues:
+1. Check Vercel deployment logs
+2. Check browser console errors
+3. Check Supabase logs
+4. Review this checklist again
+
+
+Last Updated: December 28, 2024

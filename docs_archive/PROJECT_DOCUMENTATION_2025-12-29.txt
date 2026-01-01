@@ -1,0 +1,1456 @@
+================================================================================
+                    GAMERS SPOT - COMPLETE PROJECT DOCUMENTATION
+================================================================================
+Version: 2.1
+Last Updated: 2025-12-29
+Production Commit: 687b0a5353eb8ffa538a393918fa7dfa97aedbbf
+Latest Commit: b64bf29 (Test branch) + Recent Updates
+================================================================================
+
+TABLE OF CONTENTS
+================================================================================
+1. PROJECT OVERVIEW
+2. TECHNICAL STACK
+3. PROJECT STRUCTURE
+4. DATABASE SCHEMA & MAPPING
+5. API ENDPOINTS
+6. FEATURES & FUNCTIONALITY
+7. ENVIRONMENT VARIABLES
+8. DEPLOYMENT INFORMATION
+9. RECENT CHANGES & UPDATES (2025-12-29)
+10. TIMEZONE HANDLING & BEST PRACTICES
+11. UTILITY SCRIPTS
+12. MIGRATION GUIDE (Production)
+13. TROUBLESHOOTING
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+Project Name: Gamers Spot - Gaming Station Management System
+Description: A comprehensive web application for managing gaming stations,
+             tracking play time, calculating costs with bonus time, and
+             generating invoices for a gaming cafe business.
+
+Business Model:
+- PlayStation and Steering Wheel gaming stations
+- Hourly billing with dynamic pricing (weekday/weekend rates)
+- Bonus time system (15min/30min/1hr based on play duration)
+- Extra controller charges
+- Snacks/beverages sales integration
+- Multi-device synchronization via WebSocket for real-time updates
+- Customer database with phone lookup
+
+Target Users:
+- Gaming cafe owners/operators
+- Staff members managing gaming stations
+- Customers (indirect - through station booking)
+
+================================================================================
+2. TECHNICAL STACK
+================================================================================
+
+FRONTEND:
+- Framework: React 18.3.1 with Vite 5.4.2
+- UI Library: Custom CSS (no framework)
+- State Management: React Hooks (useState, useEffect, useRef)
+- Routing: React Router DOM 6.26.1
+- HTTP Client: Fetch API
+- Real-time Updates: WebSocket + Polling fallback
+- Excel Export: xlsx library for report exports
+
+BACKEND:
+- Runtime: Node.js with Express.js 4.19.2
+- API Architecture: RESTful API
+- Server: Express with CORS enabled
+- Middleware: Body-parser, Cookie-parser
+- Real-time: WebSocket (ws library)
+
+DATABASE:
+- Primary: PostgreSQL (Supabase hosted)
+- Local Development: PostgreSQL via Docker
+- Connection Pool: node-postgres (pg 8.12.0)
+- ORM: None (Raw SQL queries)
+- Timezone: UTC storage, IST display (Asia/Kolkata)
+
+DEPLOYMENT:
+- Frontend & API: Vercel (Serverless Functions)
+- Database: Supabase (Production & Test environments)
+- Version Control: Git + GitHub
+- Branches: main (production), Test (preview)
+
+DEVELOPMENT TOOLS:
+- Package Manager: npm
+- Environment: dotenv for config management
+- Testing: Manual testing + custom test scripts
+- Code Editor: VS Code (recommended)
+- Docker: For local PostgreSQL database
+
+================================================================================
+3. PROJECT STRUCTURE
+================================================================================
+
+Gamersspot/
+├── api/                          # Vercel serverless functions
+│   ├── auth.js                   # Authentication (login/logout/change-password)
+│   ├── customers.js              # Customer management
+│   ├── db.js                     # Database connection utility
+│   ├── invoices.js               # Invoice generation
+│   ├── paid-events.js            # Multi-device sync events
+│   ├── reports.js                # Business reports (UPDATED: timezone fixes)
+│   ├── settings.js               # Pricing/bonus/snacks config
+│   ├── stations.js               # Station CRUD operations
+│   ├── stations/
+│   │   └── transfer.js           # Station transfer functionality
+│   └── time.js                   # Server time sync
+
+├── database/                     # Database schemas & migrations
+│   ├── schema.sql                # Core database schema
+│   ├── supabase_setup.sql        # Supabase production setup
+│   ├── supabase_test_setup.sql   # Supabase test environment
+│   ├── local_setup.sql           # Local Docker PostgreSQL
+│   ├── snacks_schema.sql         # Snacks table schema
+│   └── paid_events_schema.sql    # Paid events table schema
+
+├── scripts/                      # Utility & migration scripts
+│   ├── setup-auth.mjs            # Create admin users table
+│   ├── setup-pricing-db.mjs      # Create pricing_rules table
+│   ├── setup-bonus-config.mjs    # Create bonus_config table
+│   ├── add-buffer-minutes.mjs    # Add billing buffer config
+│   ├── add-extra-controller-rate.mjs  # Add controller pricing
+│   ├── migrate-ps5-to-playstation.mjs # Game type migration
+│   ├── deploy-test.mjs           # Deploy to test environment
+│   ├── reset-password.mjs        # Admin password reset
+│   ├── reset-all-stations.mjs    # NEW: Reset all stations to default
+│   ├── verify-stations.mjs       # NEW: Verify station states
+│   └── check-invoice-timestamps.mjs   # NEW: Debug timezone issues
+
+├── src/                          # React frontend source
+│   ├── components/               # React components
+│   │   ├── StationCard.jsx       # Gaming station UI card
+│   │   ├── PricingConfig.jsx     # Pricing configuration
+│   │   ├── BonusConfig.jsx       # Bonus time configuration
+│   │   ├── SnacksConfig.jsx      # Snacks management UI
+│   │   ├── Login.jsx             # Admin login
+│   │   ├── ChangePassword.jsx    # Password management
+│   │   ├── Reports.jsx           # Business reports
+│   │   ├── BillingPanel.jsx      # Billing and checkout
+│   │   ├── InvoiceViewer.jsx     # Invoice display
+│   │   ├── TransferStations.jsx  # Station transfer UI
+│   │   └── Logo.jsx              # Branding component
+│   ├── utils/                    # Utility functions
+│   │   ├── pricing.js            # Pricing & bonus calculations
+│   │   ├── api.js                # API client functions
+│   │   ├── timer.js              # Timer utilities
+│   │   ├── storage.js            # Local storage management
+│   │   ├── timezone.js           # IST timezone utilities
+│   │   ├── alarm.js              # Audio notifications
+│   │   ├── sms.js                # SMS integration (placeholder)
+│   │   └── websocket.js          # NEW: WebSocket client
+│   ├── App.jsx                   # Main application component (UPDATED)
+│   ├── index.css                 # Global styles
+│   └── main.jsx                  # React entry point
+
+├── public/                       # Static assets
+│   └── gamers-spot-logo.png      # Application logo
+
+├── .env.local                    # Local environment variables
+├── .env.test                     # Test environment variables
+├── .env.prod                     # Production environment variables
+├── server.js                     # Express server (local dev)
+├── websocket.js                  # NEW: WebSocket server
+├── vercel.json                   # Vercel deployment config
+├── package.json                  # Dependencies & scripts
+├── vite.config.js                # Vite configuration
+└── docker-compose.yml            # Local PostgreSQL setup
+
+================================================================================
+4. DATABASE SCHEMA & MAPPING
+================================================================================
+
+DATABASE: PostgreSQL (Supabase)
+TIMEZONE STRATEGY: 
+- Storage: UTC (TIMESTAMPTZ)
+- Display: IST (Asia/Kolkata)
+- Conversion: Server-side in SQL queries
+
+IMPORTANT: All timestamps are stored in UTC and converted to IST for display
+and filtering. This ensures global scalability and accurate date handling.
+
+--------------------------------------------------------------------------------
+TABLE: stations
+--------------------------------------------------------------------------------
+Purpose: Stores gaming station information and session data
+Primary Key: id (INTEGER)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ INTEGER      │ NO       │ -                       │
+│ name                │ VARCHAR(255) │ NO       │ -                       │
+│ game_type           │ VARCHAR(50)  │ NO       │ -                       │
+│ elapsed_time        │ INTEGER      │ YES      │ 0                       │
+│ is_running          │ BOOLEAN      │ YES      │ false                   │
+│ is_done             │ BOOLEAN      │ YES      │ false                   │
+│ extra_controllers   │ INTEGER      │ YES      │ 0                       │
+│ snacks              │ JSONB        │ YES      │ {}                      │
+│ snacks_enabled      │ BOOLEAN      │ YES      │ false                   │
+│ is_paused           │ BOOLEAN      │ YES      │ false                   │
+│ paused_time         │ INTEGER      │ YES      │ 0                       │
+│ pause_start_time    │ VARCHAR(50)  │ YES      │ NULL                    │
+│ customer_name       │ VARCHAR(255) │ YES      │ ''                      │
+│ customer_phone      │ VARCHAR(20)  │ YES      │ ''                      │
+│ start_time          │ VARCHAR(50)  │ YES      │ NULL                    │
+│ end_time            │ VARCHAR(50)  │ YES      │ NULL                    │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+INDEXES:
+- idx_stations_is_done ON (is_done)
+- idx_stations_game_type ON (game_type)
+- idx_stations_is_running ON (is_running)
+- idx_stations_is_paused ON (is_paused)
+
+GAME TYPES:
+- 'Playstation' - PlayStation gaming stations
+- 'Steering Wheel' - Racing wheel stations
+- 'System' - Generic system type
+
+DEFAULT STATIONS (7 total):
+1. Seat 1 - Playstation
+2. Seat 2 - Playstation
+3. Seat 3 - Playstation
+4. Seat 4 - Playstation
+5. Seat 5 - Playstation
+6. Seat 6 - Steering Wheel
+7. Seat 7 - System Game
+
+--------------------------------------------------------------------------------
+TABLE: customers
+--------------------------------------------------------------------------------
+Purpose: Stores customer contact information
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ phone_number        │ VARCHAR(20)  │ NO       │ -                       │
+│ customer_name       │ VARCHAR(255) │ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (phone_number)
+
+INDEXES:
+- idx_customers_phone_number ON (phone_number)
+
+--------------------------------------------------------------------------------
+TABLE: invoices
+--------------------------------------------------------------------------------
+Purpose: Stores billing/invoice records
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ invoice_number      │ VARCHAR(255) │ NO       │ -                       │
+│ stations            │ JSONB        │ NO       │ -                       │
+│ subtotal            │ DECIMAL(10,2)│ NO       │ -                       │
+│ discount            │ DECIMAL(10,2)│ YES      │ 0                       │
+│ total               │ DECIMAL(10,2)│ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (invoice_number)
+
+INDEXES:
+- idx_invoices_created_at ON (created_at)
+- idx_invoices_invoice_number ON (invoice_number)
+
+INVOICE NUMBER FORMAT: INV-{timestamp}
+Example: INV-1767019887000
+
+TIMEZONE NOTE: created_at is stored in UTC. All date filtering queries
+convert to IST timezone before comparison to ensure accurate reporting.
+
+--------------------------------------------------------------------------------
+TABLE: snacks
+--------------------------------------------------------------------------------
+Purpose: Stores snack/beverage items for sale
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ name                │ VARCHAR(255) │ NO       │ -                       │
+│ price               │ DECIMAL(10,2)│ NO       │ -                       │
+│ active              │ BOOLEAN      │ YES      │ true                    │
+│ display_order       │ INTEGER      │ YES      │ 0                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (name)
+
+INDEXES:
+- idx_snacks_active ON (active)
+- idx_snacks_display_order ON (display_order)
+
+DEFAULT SNACKS:
+1. Coke Bottle - ₹20
+2. Coke Can - ₹40
+3. Lays Chips - ₹5
+4. Kurkure - ₹5
+
+--------------------------------------------------------------------------------
+TABLE: paid_events
+--------------------------------------------------------------------------------
+Purpose: Multi-device synchronization for payment events
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ invoice_number      │ VARCHAR(255) │ YES      │ NULL                    │
+│ station_ids         │ INTEGER[]    │ NO       │ -                       │
+│ reset_data          │ JSONB        │ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+│ processed           │ BOOLEAN      │ YES      │ false                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+INDEXES:
+- idx_paid_events_created_at ON (created_at DESC)
+- idx_paid_events_processed ON (processed)
+
+PURPOSE: When payment is made on one device, this table broadcasts the reset
+         event to all other connected devices for real-time synchronization.
+
+--------------------------------------------------------------------------------
+TABLE: admin_users
+--------------------------------------------------------------------------------
+Purpose: Admin authentication system
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ username            │ VARCHAR(50)  │ NO       │ -                       │
+│ password_hash       │ VARCHAR(64)  │ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+│ last_login          │ TIMESTAMPTZ  │ YES      │ NULL                    │
+│ is_active           │ BOOLEAN      │ YES      │ true                    │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (username)
+
+INDEXES:
+- idx_admin_users_username ON (username)
+
+DEFAULT USER:
+- Username: admin
+- Password: admin2026 (SHA-256 hashed)
+- ⚠️ MUST CHANGE PASSWORD AFTER FIRST LOGIN!
+
+PASSWORD HASHING: SHA-256 (crypto.createHash('sha256'))
+
+--------------------------------------------------------------------------------
+TABLE: pricing_rules
+--------------------------------------------------------------------------------
+Purpose: Dynamic pricing configuration
+Primary Key: game_type (VARCHAR)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ game_type           │ VARCHAR(50)  │ NO       │ -                       │
+│ weekday_rate        │ INTEGER      │ NO       │ 0                       │
+│ weekend_rate        │ INTEGER      │ NO       │ 0                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+DEFAULT PRICING RULES:
+┌──────────────────┬───────────────┬───────────────┐
+│ Game Type        │ Weekday Rate  │ Weekend Rate  │
+├──────────────────┼───────────────┼───────────────┤
+│ Playstation      │ ₹150/hr       │ ₹200/hr       │
+│ Steering Wheel   │ ₹150/hr       │ ₹150/hr       │
+│ System           │ ₹100/hr       │ ₹100/hr       │
+│ buffer_minutes   │ 10 min        │ 10 min        │
+│ extra_controller │ ₹50           │ ₹50           │
+└──────────────────┴───────────────┴───────────────┘
+
+SPECIAL ENTRIES:
+- 'buffer_minutes': Billing grace period (default: 10 minutes)
+- 'extra_controller': Extra controller charge per hour
+
+--------------------------------------------------------------------------------
+TABLE: bonus_config
+--------------------------------------------------------------------------------
+Purpose: Configurable bonus time system
+Primary Key: id (INTEGER, always 1)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ INTEGER      │ NO       │ 1                       │
+│ config_data         │ JSONB        │ NO       │ '{}'::jsonb             │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW()                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- CHECK (id = 1) - Ensures only one configuration row
+
+INDEXES:
+- idx_bonus_config_data ON (config_data) USING gin
+
+DEFAULT CONFIGURATION:
+{
+  "Playstation": {
+    "weekday": {
+      "oneHour": 900,      // 15 minutes (in seconds)
+      "twoHours": 1800,    // 30 minutes
+      "threeHours": 3600   // 1 hour
+    },
+    "weekend": {
+      "oneHour": 0,        // No bonus
+      "twoHours": 0,
+      "threeHours": 0
+    }
+  },
+  "Steering Wheel": {
+    "weekday": {
+      "oneHour": 900,
+      "twoHours": 1800,
+      "threeHours": 3600
+    },
+    "weekend": {
+      "oneHour": 0,
+      "twoHours": 0,
+      "threeHours": 0
+    }
+  },
+  "System": {
+    "weekday": {
+      "oneHour": 900,
+      "twoHours": 1800,
+      "threeHours": 3600
+    },
+    "weekend": {
+      "oneHour": 900,
+      "twoHours": 1800,
+      "threeHours": 3600
+    }
+  }
+}
+
+BONUS TIER LOGIC:
+- 1 hour played (1h-1h59m) → oneHour bonus
+- 2 hours played (2h-2h59m) → twoHours bonus
+- 3+ hours played → threeHours bonus
+
+================================================================================
+5. API ENDPOINTS
+================================================================================
+
+BASE URL (Local): http://localhost:3001
+BASE URL (Production): https://gamersspot.vercel.app
+
+--------------------------------------------------------------------------------
+AUTHENTICATION
+--------------------------------------------------------------------------------
+
+POST /api/auth
+  Description: Admin login
+  Body: { username: string, password: string }
+  Response: { success: boolean, message: string }
+  Sets: HTTP-only cookie with session token
+
+POST /api/auth (with action=logout)
+  Description: Admin logout
+  Body: { action: 'logout' }
+  Response: { success: boolean }
+  Clears: Session cookie
+
+POST /api/auth (with action=change-password)
+  Description: Change admin password
+  Body: { action: 'change-password', currentPassword: string, newPassword: string }
+  Response: { success: boolean, message: string }
+  Requires: Valid session cookie
+
+--------------------------------------------------------------------------------
+STATIONS
+--------------------------------------------------------------------------------
+
+GET /api/stations
+  Description: Get all gaming stations
+  Response: Array of station objects
+  
+POST /api/stations
+  Description: Create new station
+  Body: { name: string, game_type: string }
+  Response: Created station object
+
+PUT /api/stations
+  Description: Update station
+  Body: Station object with updated fields
+  Response: Updated station object
+
+DELETE /api/stations?id={id}
+  Description: Delete station (only if id > 7)
+  Response: { success: boolean }
+
+POST /api/stations/transfer
+  Description: Transfer session between stations
+  Body: { fromStationId: number, toStationId: number }
+  Response: { success: boolean, message: string }
+
+--------------------------------------------------------------------------------
+CUSTOMERS
+--------------------------------------------------------------------------------
+
+GET /api/customers?phoneNumber={phone}
+  Description: Lookup customer by phone
+  Response: Customer object or null
+
+GET /api/customers?getAll=true
+  Description: Get all customers
+  Response: Array of customer objects
+
+POST /api/customers
+  Description: Create or update customer
+  Body: { phoneNumber: string, customerName: string }
+  Response: Customer object
+
+--------------------------------------------------------------------------------
+INVOICES
+--------------------------------------------------------------------------------
+
+GET /api/invoices
+  Description: Get all invoices
+  Response: Array of invoice objects
+
+GET /api/invoices?invoiceNumber={number}
+  Description: Get specific invoice
+  Response: Invoice object
+
+POST /api/invoices
+  Description: Create new invoice
+  Body: { invoiceNumber: string, stations: array, subtotal: number, discount: number, total: number }
+  Response: Created invoice object
+
+--------------------------------------------------------------------------------
+SETTINGS (Consolidated Endpoint)
+--------------------------------------------------------------------------------
+
+GET /api/settings?type=pricing
+  Description: Get pricing rules
+  Response: Array of pricing rule objects
+
+POST /api/settings?type=pricing
+  Description: Update pricing rules
+  Body: Array of pricing rule objects
+  Response: { success: boolean, data: updated rules }
+
+GET /api/settings?type=bonus
+  Description: Get bonus configuration
+  Response: Bonus config object
+
+PUT /api/settings?type=bonus
+  Description: Update bonus configuration
+  Body: { config_data: JSONB object }
+  Response: { success: boolean, data: updated config }
+
+GET /api/settings?type=snacks&active=true
+  Description: Get snacks list (active only)
+  Response: Array of snack objects
+
+POST /api/settings?type=snacks
+  Description: Create new snack
+  Body: { name: string, price: number, active: boolean, display_order: number }
+  Response: Created snack object
+
+PUT /api/settings?type=snacks
+  Description: Update snack
+  Body: Snack object with updated fields
+  Response: Updated snack object
+
+DELETE /api/settings?type=snacks&id={id}&hardDelete={boolean}
+  Description: Delete or deactivate snack
+  Response: { success: boolean }
+
+--------------------------------------------------------------------------------
+REPORTS (UPDATED: Timezone-aware queries)
+--------------------------------------------------------------------------------
+
+GET /api/reports?type=usage&date=YYYY-MM-DD
+  Description: Get system usage report for a specific date
+  Response: { date, summary, stations }
+  Note: Date filtering uses IST timezone conversion
+
+GET /api/reports?type=daily-revenue&date=YYYY-MM-DD
+  Description: Get daily revenue report
+  Response: { date, summary, invoices }
+  Note: Properly converts UTC timestamps to IST for date filtering
+
+GET /api/reports?type=monthly-revenue&month={1-12}&year={YYYY}
+  Description: Get monthly revenue report
+  Response: { month, year, summary, dailyBreakdown, invoices }
+  Note: Month/year extraction uses IST timezone
+
+GET /api/reports?type=customer-report
+  Description: Get customer analytics
+  Response: { customers }
+
+GET /api/reports?type=snacks-report&date=YYYY-MM-DD
+  Description: Get snacks sales report for a date
+  Response: { snacks, totalRevenue }
+
+GET /api/reports?type=snacks-report&month={1-12}&year={YYYY}
+  Description: Get snacks sales report for a month
+  Response: { snacks, totalRevenue }
+
+GET /api/reports?type=snacks-report&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+  Description: Get snacks sales report for a date range
+  Response: { snacks, totalRevenue }
+
+--------------------------------------------------------------------------------
+PAID EVENTS (Multi-device Sync)
+--------------------------------------------------------------------------------
+
+GET /api/paid-events?since={timestamp}
+  Description: Get recent paid events
+  Response: Array of paid event objects
+
+POST /api/paid-events
+  Description: Create paid event (broadcast reset)
+  Body: { invoiceNumber: string, stationIds: array, resetData: object }
+  Response: Created event object
+
+--------------------------------------------------------------------------------
+TIME SYNC
+--------------------------------------------------------------------------------
+
+GET /api/time
+  Description: Get server time (IST timezone)
+  Response: { serverTime: ISO string, timezone: 'Asia/Kolkata' }
+
+================================================================================
+6. FEATURES & FUNCTIONALITY
+================================================================================
+
+CORE FEATURES:
+--------------------------------------------------------------------------------
+
+1. STATION MANAGEMENT
+   - Create, read, update, delete gaming stations
+   - Support for multiple game types (Playstation, Steering Wheel, System)
+   - Real-time timer tracking with pause/resume
+   - Session transfer between stations
+   - Multi-device synchronization via WebSocket
+   - Station reset functionality
+
+2. PRICING SYSTEM
+   - Dynamic pricing based on game type
+   - Weekday vs Weekend rates
+   - Configurable via admin dashboard
+   - Extra controller charges
+   - Billing buffer time (grace period)
+   - Database-driven pricing rules
+
+3. BONUS TIME SYSTEM
+   - Tier-based bonus (15min/30min/1hr)
+   - Configurable per game type and day type
+   - Automatic calculation based on play duration
+   - Disabled when snacks are purchased
+   - Smart buffer logic:
+     * 5-minute buffer when bonus is active
+     * 10-minute buffer when no bonus
+   - Database-driven bonus configuration
+
+4. BILLING & INVOICING
+   - Automatic cost calculation
+   - Bonus time deduction
+   - Extra controller charges
+   - Snacks/beverages integration
+   - Discount/adjustment support (positive or negative)
+   - Invoice generation with unique numbers
+   - Invoice history and reports
+   - Timezone-aware invoice timestamps
+
+5. AUTHENTICATION & SECURITY
+   - Admin login system
+   - Password hashing (SHA-256)
+   - Session management with HTTP-only cookies
+   - Password change functionality
+   - Protected admin routes
+   - Default credentials with mandatory password change
+
+6. REPORTING & ANALYTICS
+   - Daily/Monthly revenue reports
+   - System usage reports
+   - Customer analytics
+   - Snacks sales reports
+   - Date range filtering
+   - Excel export capabilities
+   - Timezone-aware date filtering (IST)
+
+7. MULTI-DEVICE SYNC
+   - Real-time updates via WebSocket
+   - Polling fallback mechanism
+   - Paid events broadcasting
+   - Automatic station reset synchronization
+   - Connection status monitoring
+
+8. CUSTOMER MANAGEMENT
+   - Customer database with phone lookup
+   - Automatic customer creation
+   - Customer history tracking
+   - Registration date tracking
+
+9. SNACKS MANAGEMENT
+   - Dynamic snacks menu
+   - Price configuration
+   - Active/inactive status
+   - Display order customization
+   - Soft delete functionality
+
+BUSINESS LOGIC:
+--------------------------------------------------------------------------------
+
+PRICING CALCULATION:
+1. Get base rate (weekday/weekend based on current day)
+2. Calculate total hours played
+3. Calculate bonus time (if applicable)
+4. Subtract bonus from total time = billable time
+5. Apply billing buffer:
+   - If bonus > 0: Use 5-minute buffer
+   - If bonus = 0: Use configurable buffer (default: 10 min)
+6. Round up billable time to nearest hour
+7. Add extra controller charges
+8. Add snacks charges
+9. Apply discount/adjustment (if any)
+10. Generate final total
+
+BONUS CALCULATION LOGIC:
+- Check if snacks are enabled (if yes, no bonus)
+- Get total hours played (not billable hours)
+- Determine tier:
+  * 1h to 1h 59m → Tier 1 (15 minutes)
+  * 2h to 2h 59m → Tier 2 (30 minutes)
+  * 3h or more → Tier 3 (1 hour)
+- Return bonus time in seconds
+
+BUFFER LOGIC:
+- Purpose: Prevent charging full extra hour for small overages
+- When bonus > 0: 5-minute buffer
+  Example: 1h 4m with 15min bonus → 49min billable → charge 1hr (not 2hr)
+- When bonus = 0: 10-minute buffer (configurable)
+  Example: 1h 8m → charge 1hr (not 2hr)
+
+WEEKEND DETECTION:
+- Saturday (day 6) and Sunday (day 0)
+- Uses JavaScript Date.getDay()
+- Affects pricing and bonus availability
+
+================================================================================
+7. ENVIRONMENT VARIABLES
+================================================================================
+
+LOCAL DEVELOPMENT (.env.local):
+--------------------------------------------------------------------------------
+POSTGRES_URL=postgresql://user:password@localhost:5434/Gamersspot-local
+PORT=3001
+NODE_ENV=development
+
+TEST ENVIRONMENT (.env.test):
+--------------------------------------------------------------------------------
+TEST_POSTGRES_URL=postgresql://user:password@host/database
+POSTGRES_URL=${TEST_POSTGRES_URL}
+NODE_ENV=test
+
+PRODUCTION ENVIRONMENT (.env.prod):
+--------------------------------------------------------------------------------
+POSTGRES_URL=postgresql://user:password@host/database
+NODE_ENV=production
+
+VERCEL ENVIRONMENT VARIABLES:
+--------------------------------------------------------------------------------
+Production:
+- POSTGRES_URL → Production Supabase connection string
+- NODE_ENV → production
+
+Preview (Test branch):
+- TEST_POSTGRES_URL → Test Supabase connection string
+- POSTGRES_URL → ${TEST_POSTGRES_URL}
+- NODE_ENV → preview
+
+================================================================================
+8. DEPLOYMENT INFORMATION
+================================================================================
+
+DEPLOYMENT PLATFORMS:
+--------------------------------------------------------------------------------
+
+VERCEL (Frontend + API):
+- Repository: GitHub (ponraj1990/Gamersspot)
+- Production Branch: main
+- Preview Branch: Test
+- Build Command: npm run build
+- Output Directory: dist
+- Serverless Functions: api/*
+- Function Limit: 12 (Hobby plan)
+
+SUPABASE (Database):
+- Production Database: Gamersspot (main)
+- Test Database: Gamersspot-test
+- Region: Asia Pacific (Mumbai)
+- Connection Pooling: Enabled
+- SSL: Required
+- Timezone: UTC storage, IST conversion in queries
+
+DEPLOYMENT WORKFLOW:
+--------------------------------------------------------------------------------
+
+1. LOCAL DEVELOPMENT:
+   - Run: npm run dev:all
+   - Frontend: http://localhost:5173
+   - Backend: http://localhost:3001
+   - WebSocket: ws://localhost:3001
+   - Database: Docker PostgreSQL (port 5434)
+
+2. TEST DEPLOYMENT:
+   - Push to 'Test' branch
+   - Vercel auto-deploys preview
+   - Uses TEST_POSTGRES_URL
+   - Preview URL: https://gamersspot-*.vercel.app
+
+3. PRODUCTION DEPLOYMENT:
+   - Merge Test → main
+   - Vercel auto-deploys production
+   - Uses POSTGRES_URL
+   - Production URL: https://gamersspot.vercel.app
+
+DEPLOYMENT SCRIPTS:
+--------------------------------------------------------------------------------
+npm run dev          # Frontend only (Vite)
+npm run dev:server   # Backend only (Express)
+npm run dev:all      # Both frontend & backend (with WebSocket)
+npm run build        # Build for production
+npm run preview      # Preview production build
+
+================================================================================
+9. RECENT CHANGES & UPDATES (2025-12-29)
+================================================================================
+
+CRITICAL TIMEZONE FIXES:
+--------------------------------------------------------------------------------
+
+ISSUE: Date Discrepancy in Reports
+- Problem: Invoices created late in the evening (e.g., 8:21 PM IST) were
+  appearing in the next day's report due to incorrect timezone conversion.
+- Root Cause: SQL queries using `DATE(created_at AT TIME ZONE 'Asia/Kolkata')`
+  which doesn't properly handle UTC to IST conversion.
+- Solution: Updated all date filtering queries to use:
+  `to_char(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')`
+
+AFFECTED ENDPOINTS (FIXED):
+1. Daily Revenue Report (/api/reports?type=daily-revenue)
+2. Monthly Revenue Report (/api/reports?type=monthly-revenue)
+3. Snacks Report - All variants (date, month, range)
+
+ISSUE: Dashboard Revenue Display
+- Problem: Dashboard showing previous day's revenue (₹1600 from Dec 28)
+  instead of current day's revenue (₹300 for Dec 29).
+- Root Cause: Client-side date filtering using `toLocaleDateString()` which
+  doesn't handle timezone conversion reliably.
+- Solution: Changed dashboard to use Daily Revenue API endpoint (which has
+  proper server-side timezone handling) instead of client-side filtering.
+
+FILES MODIFIED:
+- api/reports.js - All date filtering queries updated
+- src/App.jsx - Dashboard revenue fetching logic updated
+- src/utils/api.js - Added reportsAPI import
+
+NEW UTILITY SCRIPTS:
+--------------------------------------------------------------------------------
+
+1. scripts/reset-all-stations.mjs
+   Purpose: Reset all gaming stations to default values
+   Features:
+   - Resets all timers to 00:00:00
+   - Clears customer information
+   - Removes extra controllers
+   - Resets snacks to 0
+   - Clears pause states
+   - Sets all stations to "Available" status
+   Usage: node scripts/reset-all-stations.mjs
+
+2. scripts/verify-stations.mjs
+   Purpose: Verify current database state of all stations
+   Features:
+   - Shows all station fields
+   - Displays current values
+   - Helps debug station state issues
+   Usage: node scripts/verify-stations.mjs
+
+3. scripts/check-invoice-timestamps.mjs
+   Purpose: Debug timezone issues in invoice timestamps
+   Features:
+   - Shows raw timestamps
+   - Displays UTC and IST conversions
+   - Shows date extraction in both timezones
+   - Helps identify timezone conversion problems
+   Usage: node scripts/check-invoice-timestamps.mjs
+
+WEBSOCKET IMPLEMENTATION:
+--------------------------------------------------------------------------------
+
+NEW FILES:
+- websocket.js (server) - WebSocket server for real-time updates
+- src/utils/websocket.js (client) - WebSocket client connection
+
+FEATURES:
+- Real-time station updates across all connected devices
+- Connection status monitoring
+- Automatic reconnection on disconnect
+- Fallback to polling if WebSocket unavailable
+- Heartbeat mechanism to keep connections alive
+
+BENEFITS:
+- Instant updates when stations change
+- Reduced server load (fewer polling requests)
+- Better user experience with real-time sync
+- Scalable for multiple concurrent users
+
+OTHER IMPROVEMENTS:
+--------------------------------------------------------------------------------
+
+1. ENHANCED REPORTING:
+   - All reports now use consistent timezone handling
+   - Accurate date filtering in IST timezone
+   - Proper month/year extraction for monthly reports
+   - Fixed date range filtering in snacks reports
+
+2. DASHBOARD ACCURACY:
+   - Revenue display now matches Daily Revenue report
+   - Uses server-side timezone conversion
+   - Eliminates client-side date parsing issues
+   - Real-time revenue updates
+
+3. CODE QUALITY:
+   - Added comprehensive logging for timezone conversions
+   - Improved error handling in date queries
+   - Consistent timezone utility usage
+   - Better debugging capabilities
+
+4. DOCUMENTATION:
+   - Added timezone handling section
+   - Documented all utility scripts
+   - Updated API endpoint documentation
+   - Added troubleshooting for timezone issues
+
+================================================================================
+10. TIMEZONE HANDLING & BEST PRACTICES
+================================================================================
+
+ARCHITECTURE OVERVIEW:
+--------------------------------------------------------------------------------
+
+┌─────────────────────────────────────────────────────┐
+│                   DATABASE                          │
+│  Stores: TIMESTAMPTZ in UTC                        │
+│  Example: 2025-12-29 14:51:27+00 (UTC)             │
+└─────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────┐
+│              API LAYER (Backend)                    │
+│  Converts: UTC → IST for queries                   │
+│  Query: created_at AT TIME ZONE 'UTC'              │
+│         AT TIME ZONE 'Asia/Kolkata'                │
+└─────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────┐
+│           FRONTEND (User Interface)                 │
+│  Displays: IST to users                            │
+│  Example: 29 Dec 2025, 8:21 PM IST                │
+└─────────────────────────────────────────────────────┘
+
+WHY UTC STORAGE?
+--------------------------------------------------------------------------------
+
+1. GLOBAL SCALABILITY
+   - UTC is timezone-agnostic
+   - Easy to convert to any timezone
+   - Future-proof for multi-region expansion
+
+2. DAYLIGHT SAVING TIME (DST) HANDLING
+   - UTC never changes
+   - No ambiguous timestamps during DST transitions
+   - Consistent historical data
+
+3. DATABASE PORTABILITY
+   - UTC timestamps remain accurate regardless of server timezone
+   - Easy database migration across regions
+   - No timezone-dependent data corruption
+
+4. THIRD-PARTY INTEGRATIONS
+   - Most APIs expect and return UTC timestamps
+   - Easier integration with external services
+   - Standard format for data exchange
+
+5. HISTORICAL ACCURACY
+   - Preserves exact moments in time globally
+   - No ambiguity if timezone rules change
+   - Reliable audit trails
+
+CORRECT TIMEZONE CONVERSION PATTERNS:
+--------------------------------------------------------------------------------
+
+❌ INCORRECT (Old Pattern):
+```sql
+WHERE DATE(created_at AT TIME ZONE 'Asia/Kolkata') = $1::date
+```
+Problem: Doesn't properly convert from UTC to IST
+
+✅ CORRECT (New Pattern):
+```sql
+WHERE to_char(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') = $1
+```
+Benefit: Explicitly converts UTC → IST before date extraction
+
+MONTH/YEAR EXTRACTION:
+```sql
+WHERE EXTRACT(MONTH FROM created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = $1
+  AND EXTRACT(YEAR FROM created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') = $2
+```
+
+FRONTEND TIMEZONE UTILITIES:
+--------------------------------------------------------------------------------
+
+Location: src/utils/timezone.js
+
+Key Functions:
+- getIndianTime() - Get current time in IST
+- getIndianDateString() - Get current date in YYYY-MM-DD format (IST)
+- getIndianTimeString() - Get current time in HH:MM:SS format (IST)
+- formatIndianDate() - Format date for display in IST
+- getIndianTimestamp() - Get Unix timestamp in IST
+- getIndianTimeISO() - Get ISO string in IST
+
+BEST PRACTICES:
+--------------------------------------------------------------------------------
+
+1. ALWAYS store timestamps in UTC (TIMESTAMPTZ)
+2. ALWAYS convert to IST in SQL queries for filtering
+3. ALWAYS use timezone utilities for date/time operations
+4. NEVER rely on client-side timezone conversion for filtering
+5. ALWAYS use server-side APIs for date-based queries
+6. ALWAYS test timezone conversions with edge cases (late evening times)
+7. ALWAYS document timezone handling in code comments
+
+TESTING TIMEZONE CONVERSIONS:
+--------------------------------------------------------------------------------
+
+Use the diagnostic script:
+```bash
+node scripts/check-invoice-timestamps.mjs
+```
+
+This will show:
+- Raw timestamps from database
+- UTC conversion
+- IST conversion
+- Date extraction in both timezones
+- Helps identify conversion issues
+
+================================================================================
+11. UTILITY SCRIPTS
+================================================================================
+
+LOCATION: scripts/
+
+DATABASE SETUP SCRIPTS:
+--------------------------------------------------------------------------------
+
+1. setup-auth.mjs
+   Purpose: Create admin_users table
+   Usage: node scripts/setup-auth.mjs
+   Creates: Default admin user (admin/admin2026)
+
+2. setup-pricing-db.mjs
+   Purpose: Create pricing_rules table
+   Usage: node scripts/setup-pricing-db.mjs
+   Creates: Default pricing rules for all game types
+
+3. setup-bonus-config.mjs
+   Purpose: Create bonus_config table
+   Usage: node scripts/setup-bonus-config.mjs
+   Creates: Default bonus configuration
+
+4. add-buffer-minutes.mjs
+   Purpose: Add buffer_minutes to pricing_rules
+   Usage: node scripts/add-buffer-minutes.mjs
+   Adds: Billing buffer configuration
+
+5. add-extra-controller-rate.mjs
+   Purpose: Add extra_controller pricing
+   Usage: node scripts/add-extra-controller-rate.mjs
+   Adds: Extra controller charge configuration
+
+MIGRATION SCRIPTS:
+--------------------------------------------------------------------------------
+
+6. migrate-ps5-to-playstation.mjs
+   Purpose: Rename PS5 game type to Playstation
+   Usage: node scripts/migrate-ps5-to-playstation.mjs
+   Updates: All stations and pricing rules
+
+7. deploy-test.mjs
+   Purpose: Deploy to test environment
+   Usage: node scripts/deploy-test.mjs
+   Runs: Database migrations on test database
+
+UTILITY SCRIPTS (NEW):
+--------------------------------------------------------------------------------
+
+8. reset-all-stations.mjs
+   Purpose: Reset all stations to default values
+   Usage: node scripts/reset-all-stations.mjs
+   Features:
+   - Resets all timers to 0
+   - Clears customer data
+   - Resets extra controllers
+   - Clears snacks
+   - Sets all to not running/done/paused
+   Output: Confirmation of reset stations
+
+9. verify-stations.mjs
+   Purpose: Verify current station states
+   Usage: node scripts/verify-stations.mjs
+   Features:
+   - Shows all station fields
+   - Displays current values
+   - Helps debug issues
+   Output: Detailed station information
+
+10. check-invoice-timestamps.mjs
+    Purpose: Debug timezone issues
+    Usage: node scripts/check-invoice-timestamps.mjs
+    Features:
+    - Shows raw timestamps
+    - Displays UTC/IST conversions
+    - Shows date extraction
+    - Identifies timezone problems
+    Output: Timestamp analysis for recent invoices
+
+ADMIN SCRIPTS:
+--------------------------------------------------------------------------------
+
+11. reset-password.mjs
+    Purpose: Reset admin password
+    Usage: node scripts/reset-password.mjs
+    Interactive: Prompts for new password
+    Updates: admin_users table
+
+SCRIPT EXECUTION:
+--------------------------------------------------------------------------------
+
+All scripts require:
+1. Node.js installed
+2. Environment variables configured (.env.local or .env)
+3. Database connection available
+
+Example:
+```bash
+# Ensure environment is set
+export $(cat .env.local | xargs)
+
+# Run script
+node scripts/reset-all-stations.mjs
+```
+
+================================================================================
+12. MIGRATION GUIDE (Production Database)
+================================================================================
+
+CURRENT PRODUCTION: Commit 687b0a5
+TARGET VERSION: Latest (Commit b64bf29 + Recent Updates)
+
+REQUIRED DATABASE CHANGES:
+--------------------------------------------------------------------------------
+
+NEW TABLES TO CREATE:
+1. admin_users - Authentication system
+2. pricing_rules - Dynamic pricing
+3. bonus_config - Bonus configuration
+
+NO CHANGES TO EXISTING TABLES
+NO TIMEZONE CHANGES NEEDED (Already using TIMESTAMPTZ)
+
+MIGRATION STEPS:
+--------------------------------------------------------------------------------
+
+Step 1: Backup Production Database
+  - Use Supabase dashboard
+  - Export full database backup
+  - Store backup securely
+
+Step 2: Create admin_users table
+  - Run: node scripts/setup-auth.mjs
+  - Verify: SELECT * FROM admin_users;
+  - Default user created: admin/admin2026
+
+Step 3: Create pricing_rules table
+  - Run: node scripts/setup-pricing-db.mjs
+  - Verify: SELECT * FROM pricing_rules;
+  - 5 entries should exist
+
+Step 4: Create bonus_config table
+  - Run: node scripts/setup-bonus-config.mjs
+  - Verify: SELECT * FROM bonus_config;
+  - 1 row with config_data should exist
+
+Step 5: Add buffer configuration
+  - Run: node scripts/add-buffer-minutes.mjs
+  - Verify: SELECT * FROM pricing_rules WHERE game_type = 'buffer_minutes';
+
+Step 6: Add extra controller pricing
+  - Run: node scripts/add-extra-controller-rate.mjs
+  - Verify: SELECT * FROM pricing_rules WHERE game_type = 'extra_controller';
+
+Step 7: Test Authentication
+  - Login with admin/admin2026
+  - Verify access to admin features
+  - Change password immediately
+
+Step 8: Verify Timezone Handling
+  - Create test invoice
+  - Check it appears in correct date report
+  - Verify dashboard revenue matches report
+
+DEFAULT CREDENTIALS AFTER MIGRATION:
+Username: admin
+Password: admin2026
+⚠️ CHANGE IMMEDIATELY!
+
+MIGRATION TIME: ~5-10 minutes
+DOWNTIME: None (additive changes only)
+
+POST-MIGRATION CHECKLIST:
+- [ ] All 3 new tables created
+- [ ] Admin user exists
+- [ ] Pricing rules inserted (5 entries)
+- [ ] Bonus config inserted
+- [ ] Buffer minutes configured
+- [ ] Extra controller rate configured
+- [ ] Indexes created
+- [ ] Test login successful
+- [ ] Password changed
+- [ ] Pricing config accessible
+- [ ] Bonus config accessible
+- [ ] Test complete booking flow
+- [ ] Verify timezone handling in reports
+- [ ] Check dashboard revenue accuracy
+
+ROLLBACK PLAN:
+--------------------------------------------------------------------------------
+
+If issues occur:
+1. Restore database from backup
+2. Revert code to previous commit
+3. Redeploy previous version
+4. Investigate issues before retry
+
+The migration is safe because:
+- Only adds new tables
+- Doesn't modify existing data
+- No breaking changes to API
+- Frontend gracefully handles missing tables
+
+================================================================================
+13. TROUBLESHOOTING
+================================================================================
+
+COMMON ISSUES & SOLUTIONS:
+--------------------------------------------------------------------------------
+
+ISSUE: Database connection failed
+SOLUTION:
+- Check POSTGRES_URL in environment variables
+- Verify Supabase database is running
+- Check SSL settings (required for Supabase)
+- Verify connection string format
+- Test connection with: node scripts/verify-stations.mjs
+
+ISSUE: Admin login not working
+SOLUTION:
+- Verify admin_users table exists
+- Check if default user was created
+- Verify password hash matches
+- Clear browser cookies and try again
+- Reset password with: node scripts/reset-password.mjs
+
+ISSUE: Bonus time not calculating correctly
+SOLUTION:
+- Check bonus_config table exists
+- Verify config_data is valid JSON
+- Check if snacks are enabled (disables bonus)
+- Verify day type detection (weekday/weekend)
+- Review bonus calculation logic in pricing.js
+
+ISSUE: Pricing not updating
+SOLUTION:
+- Check pricing_rules table exists
+- Verify game_type matches exactly
+- Check weekday/weekend detection
+- Refresh browser cache
+- Verify pricing rules in database
+
+ISSUE: Buttons overflowing card
+SOLUTION:
+- Verify latest code is deployed
+- Check StationCard.jsx has flex-1 on all buttons
+- Clear browser cache
+- Hard refresh (Ctrl+Shift+R)
+
+ISSUE: Multi-device sync not working
+SOLUTION:
+- Check WebSocket connection status
+- Verify paid_events table exists
+- Check polling fallback is active
+- Verify network connectivity
+- Check API endpoint is accessible
+- Review browser console for WebSocket errors
+
+ISSUE: Vercel deployment failed
+SOLUTION:
+- Check serverless function limit (max 12)
+- Verify build command succeeds locally
+- Check environment variables are set
+- Review Vercel deployment logs
+- Ensure all dependencies are in package.json
+
+ISSUE: Reports showing wrong date data (TIMEZONE ISSUE)
+SOLUTION:
+- Verify api/reports.js has updated timezone queries
+- Check that queries use: to_char(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')
+- Test with: node scripts/check-invoice-timestamps.mjs
+- Verify invoices created late evening appear on correct date
+- Check dashboard revenue matches Daily Revenue report
+
+ISSUE: Dashboard revenue doesn't match reports
+SOLUTION:
+- Verify App.jsx uses reportsAPI.getDailyRevenue()
+- Check that dashboard doesn't use client-side date filtering
+- Clear browser cache and reload
+- Compare dashboard and report for same date
+- Check browser console for API errors
+
+ISSUE: WebSocket connection keeps disconnecting
+SOLUTION:
+- Check server logs for errors
+- Verify WebSocket server is running (port 3001)
+- Check firewall/proxy settings
+- Verify heartbeat mechanism is working
+- Check for network stability issues
+- Polling fallback should activate automatically
+
+DEBUGGING TIPS:
+--------------------------------------------------------------------------------
+
+1. Check Browser Console:
+   - F12 → Console tab
+   - Look for API errors
+   - Check network requests
+   - Verify WebSocket connection status
+
+2. Check Server Logs:
+   - Vercel → Deployments → View Function Logs
+   - Look for database errors
+   - Check SQL query errors
+   - Review timezone conversion logs
+
+3. Test API Endpoints:
+   - Use Postman or curl
+   - Test each endpoint individually
+   - Verify request/response format
+   - Check timezone in responses
+
+4. Database Queries:
+   - Use Supabase SQL Editor
+   - Run SELECT queries to verify data
+   - Check table structure
+   - Test timezone conversions manually
+
+5. Local Testing:
+   - Run npm run dev:all
+   - Test all features locally
+   - Compare with production behavior
+   - Use utility scripts for debugging
+
+6. Timezone Debugging:
+   - Run: node scripts/check-invoice-timestamps.mjs
+   - Create test invoice late in evening
+   - Verify it appears in correct date report
+   - Check UTC vs IST conversion
+
+7. Station State Debugging:
+   - Run: node scripts/verify-stations.mjs
+   - Check all station fields
+   - Verify is_running, is_done, elapsed_time
+   - Compare with UI display
+
+SUPPORT RESOURCES:
+--------------------------------------------------------------------------------
+- Documentation: This file
+- Migration Guide: PRODUCTION_DB_MIGRATION.txt
+- Migration Details: PROD_MIGRATION_GUIDE.txt
+- GitHub Repository: ponraj1990/Gamersspot
+- Vercel Dashboard: https://vercel.com/dashboard
+- Supabase Dashboard: https://supabase.com/dashboard
+
+EMERGENCY CONTACTS:
+--------------------------------------------------------------------------------
+- Development Team: [Contact information]
+- Database Admin: [Contact information]
+- Deployment Manager: [Contact information]
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
+
+Last Updated: 2025-12-29
+Version: 2.1
+Status: ✅ Production Ready with Timezone Fixes
+Next Review: After next major feature release
+
+RECENT UPDATES (2025-12-29):
+- Fixed critical timezone issues in reports
+- Updated dashboard revenue calculation
+- Added utility scripts for debugging
+- Implemented WebSocket for real-time sync
+- Enhanced documentation with timezone best practices
+
+For questions or updates, refer to the GitHub repository or contact the
+development team.

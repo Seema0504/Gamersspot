@@ -1,0 +1,31 @@
+-- Fix Timezone Defaults (Version 2.1)
+-- Problem: 'DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')' caused double-shifting of timestamps on some servers.
+-- Fix: Use 'DEFAULT NOW()' (UTC) and handle conversion in application/query layer.
+
+ALTER TABLE stations ALTER COLUMN created_at SET DEFAULT NOW();
+ALTER TABLE stations ALTER COLUMN updated_at SET DEFAULT NOW();
+
+ALTER TABLE invoices ALTER COLUMN created_at SET DEFAULT NOW();
+
+ALTER TABLE snacks ALTER COLUMN created_at SET DEFAULT NOW();
+ALTER TABLE snacks ALTER COLUMN updated_at SET DEFAULT NOW();
+
+ALTER TABLE customers ALTER COLUMN created_at SET DEFAULT NOW();
+
+ALTER TABLE paid_events ALTER COLUMN created_at SET DEFAULT NOW();
+
+-- Optional: Fix other tables if they exist
+DO $$ 
+BEGIN 
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'pricing_rules') THEN 
+    ALTER TABLE pricing_rules ALTER COLUMN created_at SET DEFAULT NOW();
+    ALTER TABLE pricing_rules ALTER COLUMN updated_at SET DEFAULT NOW();
+  END IF; 
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'bonus_config') THEN 
+    ALTER TABLE bonus_config ALTER COLUMN created_at SET DEFAULT NOW();
+    ALTER TABLE bonus_config ALTER COLUMN updated_at SET DEFAULT NOW();
+  END IF;
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_users') THEN 
+    ALTER TABLE admin_users ALTER COLUMN created_at SET DEFAULT NOW();
+  END IF;
+END $$;

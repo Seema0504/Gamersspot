@@ -1,0 +1,1138 @@
+import { useState, useEffect, useRef } from 'react'
+import TimerDisplay from './TimerDisplay'
+import { formatTime } from '../utils/timer'
+import { calculateCost, calculatePaidHours, getBonusTime, GAME_TYPES, getRate, getDayType, getCokeBottleRate, getCokeCanRate } from '../utils/pricing'
+import { playAlarm } from '../utils/alarm'
+import { getIndianTime, getIndianTimestamp, getIndianTimeString } from '../utils/timezone'
+import { timeAPI, stationsAPI } from '../utils/api'
+
+const StationCard = ({ station, onUpdate, onDelete, snacksList = [] }) => {
+  const [elapsedTime, setElapsedTime] = useState(station.elapsedTime || 0)
+  const [isRunning, setIsRunning] = useState(station.isRunning || false)
+  const [isDone, setIsDone] = useState(station.isDone || false)
+  // Local state to track start time for immediate UI display
+  const [displayStartTime, setDisplayStartTime] = useState(station.startTime || null)
+  const intervalRef = useRef(null)
+  const timerStartTimeRef = useRef(null) // Track when timer actually started (server timestamp)
+  const lastUpdateTimeRef = useRef(null) // Track last update time for sync
+  const serverSyncIntervalRef = useRef(null) // Periodic server sync interval
+  const serverStartTimestampRef = useRef(null) // Server timestamp when timer started (for accurate calculation)
+  const visibilityHandlerRef = useRef(null) // Store visibility change handler for cleanup
+  const announcedHoursRef = useRef(new Set()) // Track which hour milestones have been announced (1, 2, 3, 4, 5)
+  
+  // Expose test function to window for manual testing
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Store test function per station
+      const testKey = `testStationTime_${station.id}`
+      window[testKey] = (testSeconds) => {
+        console.log(`[TEST] Setting ${station.name} elapsed time to ${testSeconds} seconds`)
+        // Set elapsed time
+        setElapsedTime(testSeconds)
+      }
+      
+      // Also create a global helper function
+      if (!window.testAllStations) {
+        window.testAllStations = (testSeconds) => {
+          console.log(`[TEST] Testing all stations with ${testSeconds} seconds`)
+          // Find all station test functions and call them
+          for (let i = 1; i <= 10; i++) {
+            const testKey = `testStationTime_${i}`
+            if (window[testKey]) {
+              window[testKey](testSeconds)
+            }
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const isSyncingFromParent = useRef(false)
+  const isStartingTimer = useRef(false) // Flag to prevent sync during timer startup
+  const prevStationRef = useRef({ 
+    elapsedTime: station.elapsedTime, 
+    isRunning: station.isRunning, 
+    isDone: station.isDone,
+    customerName: station.customerName || '',
+    startTime: station.startTime || null,
+    endTime: station.endTime || null
+  })
+
+  // Calculate elapsed time based on actual timestamps (works even when tab is inactive)
+  const calculateElapsedTime = () => {
+    if (!isRunning || !timerStartTimeRef.current) {
+      return elapsedTime
+    }
+    const now = getIndianTimestamp()
+    const elapsedSeconds = Math.floor((now - timerStartTimeRef.current) / 1000)
+    return elapsedTime + elapsedSeconds
+  }
+
+  // Update timer using timestamps (works even when tab is inactive)
+  useEffect(() => {
+    // Don't run timer if station is done
+    if (isDone) {
+      // Clear any running intervals
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (serverSyncIntervalRef.current) {
+        clearInterval(serverSyncIntervalRef.current)
+        serverSyncIntervalRef.current = null
+      }
+      return
+    }
+    
+    if (isRunning) {
+      console.log(`[${station.name}] Timer useEffect running - isRunning: ${isRunning}, timerStartTimeRef: ${timerStartTimeRef.current ? 'set' : 'null'}`)
+      
+      // Function to update elapsed time based on server time (works even when tab is inactive)
+      const updateTimer = async () => {
+        // Safety check: ensure timer refs are initialized
+        if (!timerStartTimeRef.current || !lastUpdateTimeRef.current || !serverStartTimestampRef.current) {
+          console.warn(`[${station.name}] Timer update called but refs not initialized!`)
+          return
+        }
+        
+        // Double-check that timer should still be running
+        if (!timerStartTimeRef.current) {
+          console.log(`[${station.name}] Timer update called but timerStartTimeRef is null, skipping`)
+          return
+        }
+        
+        try {
+          // Get server time for accurate calculation (handles idle mode)
+          const serverTime = await timeAPI.getServerTime()
+          const serverNow = serverTime.timestamp
+          const timeSinceStart = Math.floor((serverNow - serverStartTimestampRef.current) / 1000)
+          
+          // Validate timeSinceStart - prevent negative or absurdly large values
+          const MAX_ELAPSED_SECONDS = 86400 // 24 hours
+          if (timeSinceStart > 0 && timeSinceStart <= MAX_ELAPSED_SECONDS) {
+            setElapsedTime((prev) => {
+              const newTime = timeSinceStart
+              lastUpdateTimeRef.current = serverNow
+              // Only log every 10 seconds to reduce console noise
+              if (newTime % 10 === 0) {
+                console.log(`[${station.name}] Timer: ${newTime}s (server time)`)
+              }
+              
+              // Check for hour completion announcements (1-5 hours)
+              // Check if we've crossed any hour boundary (3600, 7200, 10800, 14400, 18000 seconds)
+              for (let hour = 1; hour <= 5; hour++) {
+                const hourSeconds = hour * 3600
+                // Check if we've just crossed this hour boundary (within last 2 seconds to account for timing)
+                if (newTime >= hourSeconds && prev < hourSeconds && !announcedHoursRef.current.has(hour)) {
+                  announcedHoursRef.current.add(hour)
+                  const hourMessage = `You have completed ${hour} hour${hour > 1 ? 's' : ''}`
+                  playAlarm(hourMessage, false)
+                  console.log(`[${station.name}] Hour ${hour} completion announced`)
+                }
+              }
+              
+              return newTime
+            })
+          } else if (timeSinceStart > MAX_ELAPSED_SECONDS) {
+            // Timer value is absurdly large - reset it
+            console.error(`[${station.name}] Timer value is absurdly large (${timeSinceStart}s), resetting to 0`)
+            setElapsedTime(0)
+            timerStartTimeRef.current = serverNow
+            serverStartTimestampRef.current = serverNow
+            lastUpdateTimeRef.current = serverNow
+            announcedHoursRef.current.clear()
+          }
+        } catch (error) {
+          // Fallback to client time if server time fails
+          console.warn(`[${station.name}] Server time sync failed, using client time:`, error)
+          const now = getIndianTimestamp()
+        const timeSinceLastUpdate = Math.floor((now - lastUpdateTimeRef.current) / 1000)
+        
+          // Validate timeSinceLastUpdate
+          const MAX_ELAPSED_SECONDS = 86400 // 24 hours
+          if (timeSinceLastUpdate > 0) {
+            setElapsedTime((prev) => {
+              const newTime = prev + timeSinceLastUpdate
+              
+              // Cap at maximum to prevent absurd values
+              const cappedTime = Math.min(newTime, MAX_ELAPSED_SECONDS)
+              if (cappedTime !== newTime) {
+                console.error(`[${station.name}] Timer value exceeded maximum (${newTime}s), capping to ${cappedTime}s`)
+              }
+              
+              lastUpdateTimeRef.current = now
+              // Only log every 10 seconds to reduce console noise
+              if (cappedTime % 10 === 0) {
+                console.log(`[${station.name}] Timer: ${cappedTime}s (client time fallback)`)
+              }
+              
+              // Check for hour completion announcements (1-5 hours)
+              // Check if we've crossed any hour boundary (3600, 7200, 10800, 14400, 18000 seconds)
+              for (let hour = 1; hour <= 5; hour++) {
+                const hourSeconds = hour * 3600
+                // Check if we've just crossed this hour boundary
+                if (cappedTime >= hourSeconds && prev < hourSeconds && !announcedHoursRef.current.has(hour)) {
+                  announcedHoursRef.current.add(hour)
+                  const hourMessage = `You have completed ${hour} hour${hour > 1 ? 's' : ''}`
+                  playAlarm(hourMessage, false)
+                  console.log(`[${station.name}] Hour ${hour} completion announced`)
+                }
+              }
+              
+              return cappedTime
+          })
+        }
+      }
+
+      // Set up periodic server sync (every 30 seconds) to handle idle mode
+      const syncWithServer = async () => {
+        if (isRunning && serverStartTimestampRef.current) {
+          try {
+            const serverTime = await timeAPI.getServerTime()
+            const serverNow = serverTime.timestamp
+            const timeSinceStart = Math.floor((serverNow - serverStartTimestampRef.current) / 1000)
+            
+            // Validate timeSinceStart - prevent negative or absurdly large values
+            const MAX_ELAPSED_SECONDS = 86400 // 24 hours
+            if (timeSinceStart > 0 && timeSinceStart <= MAX_ELAPSED_SECONDS) {
+              setElapsedTime((prev) => {
+                const newTime = timeSinceStart
+                lastUpdateTimeRef.current = serverNow
+                console.log(`[${station.name}] Server sync: ${newTime}s`)
+                
+                // Check for hour completion announcements (1-5 hours)
+                for (let hour = 1; hour <= 5; hour++) {
+                  const hourSeconds = hour * 3600
+                  if (newTime >= hourSeconds && prev < hourSeconds && !announcedHoursRef.current.has(hour)) {
+                    announcedHoursRef.current.add(hour)
+                    const hourMessage = `You have completed ${hour} hour${hour > 1 ? 's' : ''}`
+                    playAlarm(hourMessage, false)
+                    console.log(`[${station.name}] Hour ${hour} completion announced`)
+                  }
+                }
+                
+                return newTime
+              })
+            } else if (timeSinceStart > MAX_ELAPSED_SECONDS) {
+              // Timer value is absurdly large - reset it
+              console.error(`[${station.name}] Server sync: Timer value is absurdly large (${timeSinceStart}s), resetting to 0`)
+              setElapsedTime(0)
+              timerStartTimeRef.current = serverNow
+              serverStartTimestampRef.current = serverNow
+              lastUpdateTimeRef.current = serverNow
+              announcedHoursRef.current.clear()
+            }
+          } catch (error) {
+            console.warn(`[${station.name}] Server sync failed:`, error)
+          }
+        }
+      }
+
+      // Handle page visibility changes (when tab becomes active again)
+      const handleVisibilityChange = async () => {
+        if (document.visibilityState === 'visible' && isRunning && serverStartTimestampRef.current) {
+          // Immediately sync with server when tab becomes visible (handles idle mode)
+          try {
+            const serverTime = await timeAPI.getServerTime()
+            const serverNow = serverTime.timestamp
+            const timeSinceStart = Math.floor((serverNow - serverStartTimestampRef.current) / 1000)
+            
+            // Validate timeSinceStart - prevent negative or absurdly large values
+            const MAX_ELAPSED_SECONDS = 86400 // 24 hours
+            if (timeSinceStart > 0 && timeSinceStart <= MAX_ELAPSED_SECONDS) {
+              setElapsedTime((prev) => {
+                const newTime = timeSinceStart
+                lastUpdateTimeRef.current = serverNow
+                console.log(`[${station.name}] Visibility change sync: ${newTime}s`)
+                
+                // Check for hour completion announcements (1-5 hours)
+                for (let hour = 1; hour <= 5; hour++) {
+                  const hourSeconds = hour * 3600
+                  if (newTime >= hourSeconds && prev < hourSeconds && !announcedHoursRef.current.has(hour)) {
+                    announcedHoursRef.current.add(hour)
+                    const hourMessage = `You have completed ${hour} hour${hour > 1 ? 's' : ''}`
+                    playAlarm(hourMessage, false)
+                    console.log(`[${station.name}] Hour ${hour} completion announced`)
+                  }
+                }
+                
+                return newTime
+              })
+            } else if (timeSinceStart > MAX_ELAPSED_SECONDS) {
+              // Timer value is absurdly large - reset it
+              console.error(`[${station.name}] Visibility sync: Timer value is absurdly large (${timeSinceStart}s), resetting to 0`)
+              setElapsedTime(0)
+              timerStartTimeRef.current = serverNow
+              serverStartTimestampRef.current = serverNow
+              lastUpdateTimeRef.current = serverNow
+              announcedHoursRef.current.clear()
+            }
+          } catch (error) {
+            console.warn(`[${station.name}] Visibility sync failed:`, error)
+            // Fallback to client calculation
+            updateTimer().catch(err => console.error(`[${station.name}] Fallback update error:`, err))
+          }
+        }
+      }
+
+      visibilityHandlerRef.current = handleVisibilityChange
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+
+      // Function to set up all timer intervals (only call when refs are initialized)
+      const setupTimerIntervals = () => {
+        // Double-check refs are initialized before starting
+        if (!timerStartTimeRef.current || !serverStartTimestampRef.current || !lastUpdateTimeRef.current) {
+          console.warn(`[${station.name}] Cannot setup timer intervals - refs not initialized`)
+          return
+        }
+
+        // Clear any existing intervals first to prevent duplicates
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+        if (serverSyncIntervalRef.current) {
+          clearInterval(serverSyncIntervalRef.current)
+          serverSyncIntervalRef.current = null
+        }
+
+        // Update immediately
+        updateTimer()
+        console.log(`[${station.name}] Timer interval set up, calling updateTimer immediately, elapsedTime: ${elapsedTime}`)
+
+        // Set up interval for UI updates (every 1 second for smooth display)
+        intervalRef.current = setInterval(() => {
+          updateTimer().catch(err => {
+            console.error(`[${station.name}] Timer update error:`, err)
+          })
+        }, 1000)
+        console.log(`[${station.name}] Timer interval created:`, intervalRef.current)
+
+        // Set up periodic server sync (every 30 seconds) to handle idle mode
+        serverSyncIntervalRef.current = setInterval(syncWithServer, 30000) // Every 30 seconds
+        console.log(`[${station.name}] Server sync interval created:`, serverSyncIntervalRef.current)
+      }
+
+      // Initialize timer start time if not set (fallback - should be set in handleStart)
+      // If station already has startTime, try to reconstruct server timestamp
+      const refsInitialized = timerStartTimeRef.current && serverStartTimestampRef.current && lastUpdateTimeRef.current;
+      
+      if (!refsInitialized) {
+        console.log(`[${station.name}] Initializing timer start time in useEffect (fallback)`);
+        
+        // Try to get server time to initialize accurately
+        const initTimer = async () => {
+          try {
+            const serverTime = await timeAPI.getServerTime();
+            const serverTimestamp = serverTime.timestamp;
+            // If station has elapsed time, calculate start timestamp
+            const currentElapsed = elapsedTime || station.elapsedTime || 0;
+            // Validate elapsed time - cap at 24 hours (86400 seconds) to prevent absurd values
+            const MAX_ELAPSED_SECONDS = 86400; // 24 hours
+            const validatedElapsed = Math.min(Math.max(0, currentElapsed), MAX_ELAPSED_SECONDS);
+            
+            if (validatedElapsed > 0 && validatedElapsed <= MAX_ELAPSED_SECONDS) {
+              // Calculate start time based on current elapsed time
+              serverStartTimestampRef.current = serverTimestamp - (validatedElapsed * 1000);
+              timerStartTimeRef.current = serverStartTimestampRef.current;
+              lastUpdateTimeRef.current = serverTimestamp;
+              
+              // Update elapsed time if it was capped
+              if (currentElapsed !== validatedElapsed) {
+                console.warn(`[${station.name}] Elapsed time was invalid (${currentElapsed}s), capped to ${validatedElapsed}s`);
+                setElapsedTime(validatedElapsed);
+              }
+              
+              console.log(`[${station.name}] Reconstructed start timestamp from elapsed time: ${serverStartTimestampRef.current}`);
+              
+              // Mark already-completed hours as announced (to prevent re-announcing on restore)
+              for (let hour = 1; hour <= 5; hour++) {
+                const hourSeconds = hour * 3600;
+                if (validatedElapsed >= hourSeconds) {
+                  announcedHoursRef.current.add(hour);
+                }
+              }
+            } else {
+              // Fresh start - use current server time
+              serverStartTimestampRef.current = serverTimestamp;
+              timerStartTimeRef.current = serverTimestamp;
+              lastUpdateTimeRef.current = serverTimestamp;
+              setElapsedTime(0);
+              console.log(`[${station.name}] Initialized with server timestamp: ${serverTimestamp}`);
+            }
+            
+            // Refs are now initialized - trigger a state update to cause useEffect to re-run
+            // This will allow setupTimerIntervals to be called with initialized refs
+            if (isRunning) {
+              // Trigger a minimal state update to cause useEffect to re-run
+              setElapsedTime(prev => {
+                // Return the same value to avoid unnecessary updates, but trigger re-render
+                return prev !== undefined ? prev : 0;
+              });
+            }
+          } catch (error) {
+            console.warn(`[${station.name}] Failed to get server time, using client time:`, error);
+            const timestamp = getIndianTimestamp();
+            timerStartTimeRef.current = timestamp;
+            serverStartTimestampRef.current = timestamp;
+            lastUpdateTimeRef.current = timestamp;
+            setElapsedTime(0);
+            
+            // Trigger re-render to set up intervals
+            if (isRunning) {
+              setElapsedTime(prev => prev !== undefined ? prev : 0);
+            }
+          }
+        };
+        initTimer();
+      } else {
+        // Refs are already initialized - set up intervals immediately
+        setupTimerIntervals();
+      }
+    } else {
+      // Timer stopped - clear start time
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (serverSyncIntervalRef.current) {
+        clearInterval(serverSyncIntervalRef.current);
+        serverSyncIntervalRef.current = null;
+      }
+      timerStartTimeRef.current = null;
+      serverStartTimestampRef.current = null;
+      lastUpdateTimeRef.current = null;
+    }
+    
+    // Always return cleanup function
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (serverSyncIntervalRef.current) {
+        clearInterval(serverSyncIntervalRef.current)
+        serverSyncIntervalRef.current = null
+      }
+      if (visibilityHandlerRef.current) {
+        document.removeEventListener('visibilitychange', visibilityHandlerRef.current)
+        visibilityHandlerRef.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning, station.name])
+
+  // Sync local state when station is reset from parent (including when Paid is clicked)
+  useEffect(() => {
+    // CRITICAL: Skip sync if we're in the middle of starting a timer
+    // This prevents the sync from resetting isRunning before the parent updates
+    if (isStartingTimer.current) {
+      console.log(`[${station.name}] Skipping sync - timer is starting`)
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      return
+    }
+    
+    // Skip sync if we're in the middle of starting (timer refs are set but state might not be synced yet)
+    if (isRunning && timerStartTimeRef.current && elapsedTime === 0 && station.elapsedTime === 0 && station.isRunning) {
+      // This is likely a fresh start - don't interfere with timer initialization
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      return
+    }
+    
+    // Check if station prop actually changed (not just a re-render)
+    const stationChanged = prevStationRef.current.elapsedTime !== station.elapsedTime ||
+                          prevStationRef.current.isRunning !== station.isRunning ||
+                          prevStationRef.current.isDone !== station.isDone ||
+                          prevStationRef.current.customerName !== (station.customerName || '') ||
+                          prevStationRef.current.startTime !== (station.startTime || null) ||
+                          prevStationRef.current.endTime !== (station.endTime || null)
+    
+    if (!stationChanged) {
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      return
+    }
+    
+    // CRITICAL: Don't sync elapsedTime from parent if timer is running locally
+    // The local timer manages elapsedTime based on timestamps, not parent state
+    // Only sync elapsedTime if timer is NOT running locally
+    if (timerStartTimeRef.current && isRunning) {
+      // Timer is running locally - don't sync elapsedTime from parent
+      // The local timer calculation is the source of truth
+      // Only log if there's a significant mismatch (more than 1 second difference)
+      if (Math.abs(elapsedTime - (station.elapsedTime || 0)) > 1) {
+        console.log(`[${station.name}] Timer sync: local=${elapsedTime}, parent=${station.elapsedTime}`)
+      }
+      // Still update prevStationRef but don't sync elapsedTime
+      prevStationRef.current = { 
+        elapsedTime: elapsedTime, // Keep local elapsedTime
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      // Return early to prevent any other syncs that might interfere
+      return
+    }
+    
+    // Sync isRunning state from parent (only if different and not starting)
+    // CRITICAL: Don't sync isRunning if we're in the middle of starting OR if timer refs are set
+    // This prevents resetting a timer that just started but parent hasn't updated yet
+    const shouldSyncIsRunning = !isStartingTimer.current && 
+                                 !timerStartTimeRef.current && // Don't sync if timer is actually running (refs are set)
+                                 station.isRunning !== undefined && 
+                                 station.isRunning !== isRunning
+    
+    if (shouldSyncIsRunning) {
+      console.log(`[${station.name}] Syncing isRunning from parent: ${station.isRunning} (local: ${isRunning})`)
+      isSyncingFromParent.current = true
+      setIsRunning(station.isRunning)
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      setTimeout(() => { isSyncingFromParent.current = false }, 10)
+      // Don't return here, continue to check for full reset
+    } else if (!isStartingTimer.current && timerStartTimeRef.current && !station.isRunning && isRunning) {
+      // Special case: Timer refs are set (timer is running locally) but parent says it's not running
+      // This means parent hasn't updated yet - DON'T sync, keep local state
+      console.log(`[${station.name}] Timer is running locally but parent not updated yet - keeping local state`)
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      // Don't sync, just update prevStationRef
+    }
+    
+    // Sync isDone state from parent (only if different)
+    if (station.isDone !== undefined && station.isDone !== isDone) {
+      isSyncingFromParent.current = true
+      setIsDone(station.isDone)
+      // If station is done, ensure it's not running
+      if (station.isDone && isRunning) {
+        setIsRunning(false)
+        // Clear timer refs
+        timerStartTimeRef.current = null
+        serverStartTimestampRef.current = null
+        lastUpdateTimeRef.current = null
+      }
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isDone ? false : station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      setTimeout(() => { isSyncingFromParent.current = false }, 10)
+      // Don't return here, continue to check for full reset
+    }
+    
+    // Also ensure that if isDone is true, isRunning is false (defensive check)
+    if (isDone && isRunning) {
+      console.warn(`[${station.name}] Station is done but still running - stopping timer`)
+      setIsRunning(false)
+      timerStartTimeRef.current = null
+      serverStartTimestampRef.current = null
+      lastUpdateTimeRef.current = null
+    }
+    
+    // Check if parent has reset the station (after Paid button or Reset All)
+    // Reset condition: elapsedTime is 0, not running, not done, no customer name, no times
+    // CRITICAL: Don't treat as reset if timer is actually running locally (refs are set)
+    const isFullyReset = station.elapsedTime === 0 && 
+                        !station.isRunning && 
+                        !station.isDone &&
+                        (!station.customerName || station.customerName === '') &&
+                        !station.startTime &&
+                        !station.endTime &&
+                        !timerStartTimeRef.current // Don't reset if timer is running locally
+    
+    // Sync if parent has reset and local state doesn't match
+    // BUT: Don't reset if timer is running locally (timer refs are set)
+    if (isFullyReset && !timerStartTimeRef.current && (elapsedTime > 0 || isRunning || isDone)) {
+      isSyncingFromParent.current = true
+      setElapsedTime(0)
+      setIsRunning(false)
+      setIsDone(false)
+      timerStartTimeRef.current = null
+      lastUpdateTimeRef.current = null
+      announcedHoursRef.current.clear() // Reset announced hours
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+      setTimeout(() => { isSyncingFromParent.current = false }, 10)
+    } else {
+      // Update prevStationRef even if we don't sync
+      prevStationRef.current = { 
+        elapsedTime: station.elapsedTime, 
+        isRunning: station.isRunning, 
+        isDone: station.isDone,
+        customerName: station.customerName || '',
+        startTime: station.startTime || null,
+        endTime: station.endTime || null
+      }
+    }
+    
+    // Validate and cap elapsed time from parent (especially for done stations)
+    // This prevents absurdly large values from being displayed
+    const MAX_ELAPSED_SECONDS = 86400 // 24 hours
+    if (station.elapsedTime !== undefined && station.elapsedTime !== elapsedTime) {
+      const parentElapsed = station.elapsedTime || 0
+      if (parentElapsed > MAX_ELAPSED_SECONDS) {
+        console.error(`[${station.name}] Parent elapsed time is absurdly large (${parentElapsed}s), capping to ${MAX_ELAPSED_SECONDS}s`)
+        // Only update if we're not running locally (to avoid conflicts)
+        if (!timerStartTimeRef.current || !isRunning) {
+          setElapsedTime(MAX_ELAPSED_SECONDS)
+        }
+      } else if (!timerStartTimeRef.current || !isRunning) {
+        // Only sync if timer is not running locally
+        if (Math.abs(parentElapsed - elapsedTime) > 1) {
+          setElapsedTime(parentElapsed)
+        }
+      }
+    }
+    
+    // Sync display start time from station prop when it changes
+    if (station.startTime && station.startTime !== displayStartTime) {
+      setDisplayStartTime(station.startTime)
+    }
+    // Clear display start time if station is reset
+    if (!station.startTime && displayStartTime) {
+      setDisplayStartTime(null)
+    }
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [station.elapsedTime, station.isRunning, station.isDone, station.startTime, station.endTime])
+
+  // Update parent only when local state changes, not when station prop changes
+  const prevStateRef = useRef({ elapsedTime, isRunning, isDone })
+  useEffect(() => {
+    // Skip if we're syncing from parent to prevent loops
+    if (isSyncingFromParent.current) {
+      prevStateRef.current = { elapsedTime, isRunning, isDone }
+      return
+    }
+    
+    // Only update if local state actually changed (not just prop change)
+    const stateChanged = prevStateRef.current.elapsedTime !== elapsedTime || 
+                         prevStateRef.current.isRunning !== isRunning || 
+                         prevStateRef.current.isDone !== isDone
+    
+    if (stateChanged) {
+      // Only call onUpdate if values are different from station prop
+      // This prevents updating when we just synced from parent
+      // Also check if local state matches station prop (means we synced, don't update)
+      const localMatchesProp = station.elapsedTime === elapsedTime && 
+                               station.isRunning === isRunning && 
+                               station.isDone === isDone
+      
+      if (!localMatchesProp) {
+        onUpdate({
+          ...station,
+          elapsedTime,
+          isRunning,
+          isDone,
+        })
+      }
+      prevStateRef.current = { elapsedTime, isRunning, isDone }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsedTime, isRunning, isDone])
+
+  const handleStart = async () => {
+    if (!isRunning) {
+      try {
+        // Set flag to prevent sync interference during startup
+        isStartingTimer.current = true
+        
+        // Get accurate server time immediately
+        const serverTime = await timeAPI.getServerTime()
+        const serverTimestamp = serverTime.timestamp
+        const timeString = serverTime.timeString
+        
+        console.log(`[${station.name}] Starting timer - server timestamp: ${serverTimestamp}, timeString: ${timeString}`)
+        
+        // Initialize timer references with SERVER timestamp
+        timerStartTimeRef.current = serverTimestamp
+        serverStartTimestampRef.current = serverTimestamp
+        lastUpdateTimeRef.current = serverTimestamp
+        
+        // Reset elapsed time to 0 for a fresh start
+        setElapsedTime(0)
+        announcedHoursRef.current.clear() // Reset announced hours for new session
+        
+        // Set running state and update parent
+        const updatedStation = {
+          ...station,
+          elapsedTime: 0, // Reset elapsed time for new session
+          isRunning: true,
+          isDone: false, // Ensure not marked as done
+          startTime: timeString,
+          endTime: null, // Clear end time for new session
+        }
+        
+        // Update local display state immediately for UI
+        setDisplayStartTime(timeString)
+        
+        // Save to database immediately via API
+        try {
+          await stationsAPI.update({
+            id: station.id,
+            ...updatedStation
+          })
+          console.log(`[${station.name}] Start time saved to database: ${timeString}`)
+        } catch (error) {
+          console.error(`[${station.name}] Failed to save start time to database:`, error)
+          // Continue anyway - the onUpdate will eventually sync
+        }
+        
+        // Update local state
+        setIsRunning(true)
+        setIsDone(false) // Ensure local state is reset
+        
+        // Update parent immediately
+        onUpdate(updatedStation)
+        
+        // Update prevStationRef to prevent sync issues
+        prevStationRef.current = {
+          elapsedTime: 0,
+          isRunning: true,
+          isDone: false,
+          customerName: station.customerName || '',
+          startTime: timeString,
+          endTime: null
+        }
+        
+        // Clear flag after a delay
+        setTimeout(() => {
+          isStartingTimer.current = false
+          console.log(`[${station.name}] Timer startup flag cleared`)
+        }, 2000)
+        
+        // Announce start
+        const startMessage = `${station.name} timer started`
+        playAlarm(startMessage, false)
+      } catch (error) {
+        console.error(`[${station.name}] Error starting timer:`, error)
+        // Fallback to client time if server time fails
+        const timeString = getIndianTimeString()
+        const timestamp = getIndianTimestamp()
+        timerStartTimeRef.current = timestamp
+        serverStartTimestampRef.current = timestamp
+        lastUpdateTimeRef.current = timestamp
+        
+        setElapsedTime(0)
+        announcedHoursRef.current.clear() // Reset announced hours for new session
+        const updatedStation = {
+          ...station,
+          elapsedTime: 0,
+          isRunning: true,
+          isDone: false,
+          startTime: timeString,
+          endTime: null, // Clear end time for new session
+        }
+        setDisplayStartTime(timeString)
+        setIsRunning(true)
+        setIsDone(false) // Ensure local state is reset
+        onUpdate(updatedStation)
+        
+        // Update prevStationRef to prevent sync issues
+        prevStationRef.current = {
+          elapsedTime: 0,
+          isRunning: true,
+          isDone: false,
+          customerName: station.customerName || '',
+          startTime: timeString,
+          endTime: null
+        }
+        playAlarm(`${station.name} timer started`, false)
+      }
+    }
+  }
+
+
+  const handlePause = () => {
+    setIsRunning(false)
+  }
+
+  const handleReset = () => {
+    // Show confirmation dialog
+    const confirmed = window.confirm('Are you sure? Do you want to reset time?')
+    if (!confirmed) {
+      return // User cancelled, don't reset
+    }
+    
+    setIsRunning(false)
+    setElapsedTime(0)
+    setIsDone(false)
+    setDisplayStartTime(null) // Clear display start time on reset
+    timerStartTimeRef.current = null
+    lastUpdateTimeRef.current = null
+    announcedHoursRef.current.clear() // Reset announced hours
+    // Also reset extra controllers, snacks, customer name, start time, and end time
+    onUpdate({
+      ...station,
+      elapsedTime: 0,
+      isRunning: false,
+      isDone: false,
+      extraControllers: 0,
+      snacks: snacksList.length > 0 
+        ? Object.fromEntries(snacksList.map(s => {
+            const key = s.name.toLowerCase().replace(/\s+/g, '').replace('cokebottle', 'cokeBottle').replace('cokecan', 'cokeCan').replace('layschips', 'laysChips')
+            return [key, 0]
+          }))
+        : { cokeBottle: 0, cokeCan: 0 },
+      customerName: '',
+      startTime: null,
+      endTime: null,
+    })
+  }
+
+  const handleDone = async () => {
+    // Immediately stop all timer calculations
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    if (serverSyncIntervalRef.current) {
+      clearInterval(serverSyncIntervalRef.current)
+      serverSyncIntervalRef.current = null
+    }
+    
+    // Get final elapsed time - calculate from server timestamp if available for accuracy
+    let finalElapsedTime = elapsedTime
+    if (serverStartTimestampRef.current) {
+      try {
+        const serverTime = await timeAPI.getServerTime()
+        const serverNow = serverTime.timestamp
+        const timeSinceStart = Math.floor((serverNow - serverStartTimestampRef.current) / 1000)
+        // Cap at 24 hours to prevent absurd values
+        const MAX_ELAPSED_SECONDS = 86400
+        finalElapsedTime = Math.min(timeSinceStart, MAX_ELAPSED_SECONDS)
+      } catch (error) {
+        console.warn(`[${station.name}] Failed to get server time for Done, using local elapsed time:`, error)
+        // Use current elapsedTime as fallback
+      }
+    }
+    
+    // Capture the end time when Done is clicked
+    const timeString = getIndianTimeString()
+    
+    // Clear all timer refs to ensure timer stops completely
+    timerStartTimeRef.current = null
+    serverStartTimestampRef.current = null
+    lastUpdateTimeRef.current = null
+    
+    // Update local state
+    setIsRunning(false)
+    setIsDone(true)
+    setElapsedTime(finalElapsedTime) // Set final elapsed time
+    
+    // Prepare updated station with final state
+    const updatedStation = {
+      ...station,
+      elapsedTime: finalElapsedTime, // Final elapsed time
+      isDone: true,
+      isRunning: false,
+      endTime: timeString,
+    }
+    
+    // Save to database immediately
+    try {
+      await stationsAPI.update({
+        id: station.id,
+        ...updatedStation
+      })
+      console.log(`[${station.name}] Done status saved to database: elapsedTime=${finalElapsedTime}s, endTime=${timeString}`)
+    } catch (error) {
+      console.error(`[${station.name}] Failed to save Done status to database:`, error)
+      // Continue anyway - the onUpdate will eventually sync
+    }
+    
+    // Update parent immediately
+    onUpdate(updatedStation)
+    
+    // Update prevStationRef to prevent sync issues
+    prevStationRef.current = {
+      elapsedTime: finalElapsedTime,
+      isRunning: false,
+      isDone: true,
+      customerName: station.customerName || '',
+      startTime: station.startTime || null,
+      endTime: timeString
+    }
+    
+    // Announce completion
+    const completionMessage = `${station.name} completed`
+    playAlarm(completionMessage, false)
+  }
+
+  const handleExtraControllerChange = (e) => {
+    const count = parseInt(e.target.value) || 0
+    onUpdate({
+      ...station,
+      extraControllers: count
+    })
+  }
+
+  const handleSnackChange = (snackType, value) => {
+    const count = parseInt(value) || 0
+    onUpdate({
+      ...station,
+      snacks: {
+        ...(station.snacks || {}),
+        [snackType]: count
+      }
+    })
+  }
+
+  const gameType = station.gameType || GAME_TYPES.PLAYSTATION
+  const snacks = station.snacks || {}
+  const totalCost = calculateCost(
+    elapsedTime,
+    gameType,
+    station.extraControllers || 0,
+    snacks,
+    snacksList.length > 0 ? snacksList : null
+  )
+  
+  const paidHours = calculatePaidHours(elapsedTime, gameType)
+  const bonusTime = getBonusTime(elapsedTime, gameType)
+  const currentRate = getRate(gameType)
+
+  const getGameTypeColor = () => {
+    if (gameType === GAME_TYPES.PLAYSTATION) return 'cyan'
+    if (gameType === GAME_TYPES.STEERING_WHEEL) return 'purple'
+    return 'pink'
+  }
+
+  const gameColor = getGameTypeColor()
+  const borderColor = isRunning ? 'green' : isDone ? 'orange' : gameColor
+
+  return (
+    <div className={`bg-white rounded-lg p-4 border transition-all duration-300 shadow-sm ${
+      isRunning ? 'border-green-400' : 
+      isDone ? 'border-orange-400' : 
+      'border-gray-200'
+    }`}>
+      {/* Header */}
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              isDone ? 'bg-orange-500' : 
+              isRunning ? 'bg-green-500 animate-pulse' : 
+              'bg-gray-400'
+            }`}></div>
+            <h3 className="text-sm font-semibold text-gray-900 truncate">
+              {station.name} - ₹{currentRate}/hr
+            </h3>
+            {isDone && (
+              <span className="text-[10px] bg-orange-500/10 text-orange-400 px-2 py-0.5 rounded font-medium uppercase tracking-wider border border-orange-500/20" style={{ fontFamily: 'Rajdhani, sans-serif' }}>Done</span>
+            )}
+          </div>
+          {(station.startTime || displayStartTime) && (
+            <div className="mt-1">
+              <span className="text-gray-600 text-xs">
+                Start: {station.startTime || displayStartTime}
+              </span>
+              {station.endTime && (
+                <span className="ml-2 text-gray-600 text-xs">
+                  End: {station.endTime}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        {station.id > 7 && (
+          <button
+            onClick={() => onDelete(station.id)}
+            className="text-gray-500 hover:text-red-500 text-lg font-medium leading-none transition-colors p-1 rounded hover:bg-gray-100"
+            aria-label="Delete station"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Timer */}
+      <div className="bg-gray-50 rounded-lg p-4 mb-3 border border-gray-200 transition-all duration-300">
+        <div className="text-center">
+          <div className="text-2xl font-semibold text-gray-900 tracking-tight">
+            {formatTime(elapsedTime || 0)}
+          </div>
+          {isRunning && (
+            <div className="text-xs text-green-600 font-medium mt-2 flex items-center justify-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse"></span>
+              LIVE
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="flex gap-1.5 mb-2 transition-all duration-300">
+        {!isDone ? (
+          <>
+            <button
+              onClick={handleStart}
+              disabled={isRunning}
+              className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors shadow-sm ${
+                isRunning
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white border border-blue-600'
+              }`}
+            >
+              Start
+            </button>
+            <button
+              onClick={handlePause}
+              disabled={!isRunning}
+              className={`px-3 py-2 text-xs font-medium rounded-md transition-colors shadow-sm ${
+                !isRunning 
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' 
+                  : 'bg-gray-600 hover:bg-gray-700 text-white border border-gray-600'
+              }`}
+            >
+              Pause
+            </button>
+            <button
+              onClick={handleDone}
+              disabled={elapsedTime === 0}
+              className={`px-3 py-2 text-xs font-medium rounded-md transition-colors shadow-sm ${
+                elapsedTime === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                  : 'bg-orange-600 hover:bg-orange-700 text-white border border-orange-600'
+              }`}
+            >
+              Done
+            </button>
+            <button
+              onClick={handleReset}
+              className="px-3 py-2 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors border border-gray-300 hover:border-gray-400 shadow-sm"
+            >
+              Reset
+            </button>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <span className="text-xs font-semibold text-gray-600">Completed</span>
+          </div>
+        )}
+        {isDone && (
+          <button
+            onClick={handleReset}
+            className="px-3 py-2 text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all duration-200 border border-gray-300 hover:border-gray-400 shadow-sm"
+          >
+            ↻ Reset
+          </button>
+        )}
+      </div>
+
+      {/* Extras & Cost */}
+      <div className="space-y-2 pt-3 border-t border-gray-200 relative z-10">
+        {gameType === GAME_TYPES.PLAYSTATION && (
+          <div className="flex items-center gap-2 text-xs">
+            <label htmlFor={`extra-ctrl-${station.id}`} className={`text-gray-600 whitespace-nowrap font-semibold text-[10px]`}>
+              Extra Ctrl:
+            </label>
+            <select
+              id={`extra-ctrl-${station.id}`}
+              value={station.extraControllers || 0}
+              onChange={handleExtraControllerChange}
+              className={`flex-1 px-2 py-1 text-xs border border-${gameColor}-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-${gameColor}-500 focus:border-${gameColor}-500 font-semibold`}
+            >
+              <option value="0" className="bg-white">0 (+0Rs)</option>
+              <option value="1" className="bg-white">1 (+50Rs)</option>
+              <option value="2" className="bg-white">2 (+100Rs)</option>
+              <option value="3" className="bg-white">3 (+150Rs)</option>
+            </select>
+          </div>
+        )}
+        
+        {/* Snacks Enabled Checkbox */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={`snacks-enabled-${station.id}`}
+              checked={station.snacksEnabled || false}
+              onChange={(e) => onUpdate({
+                ...station,
+                snacksEnabled: e.target.checked
+              })}
+              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-${gameColor}-500 focus:ring-${gameColor}-500 focus:ring-2 rounded border-${gameColor}-300 bg-white cursor-pointer`}
+            />
+            <label 
+              htmlFor={`snacks-enabled-${station.id}`} 
+              className={`text-${gameColor}-400 text-[10px] font-semibold cursor-pointer`} 
+              style={{ fontFamily: 'Rajdhani, sans-serif' }}
+            >
+              Snacks Purchased
+            </label>
+          </div>
+        </div>
+        
+        {elapsedTime > 0 && (
+          <div className="text-xs space-y-0.5 pt-1">
+            <div className="flex justify-between text-gray-600">
+              <span className="font-semibold text-[10px]">Paid:</span>
+              <span className="font-semibold text-gray-900">{formatTime(paidHours * 3600)}</span>
+            </div>
+            {bonusTime > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span className="font-semibold text-[10px]">Bonus:</span>
+                <span className="font-semibold">+{formatTime(bonusTime)}</span>
+              </div>
+            )}
+          </div>
+        )}
+        
+        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+          <span className="text-xs text-gray-600 font-medium">Cost:</span>
+          <span className="text-base font-semibold text-gray-900">₹{totalCost}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default StationCard
+

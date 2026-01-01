@@ -1,0 +1,411 @@
+# Production Database Migration Guide
+**Version 2.0 - Complete Migration from Commit 687b0a5 to Latest**
+
+---
+
+## 📋 Overview
+
+This document outlines ALL database changes required to migrate your production database from commit `687b0a5353eb8ffa538a393918fa7dfa97aedbbf` to the latest version.
+
+**Current Production Version:** `687b0a5` (December 2024)
+**Target Version:** Latest (January 2025)
+**Migration Date:** 2025-01-29
+
+---
+
+## 🎯 What's New
+
+The following major features were added after the production deployment:
+
+1. **✅ Authentication System** - Admin login with password management
+2. **✅ Dynamic Pricing Configuration** - Database-driven pricing rules
+3. **✅ Bonus Time Configuration** - Configurable bonus time per game type
+4. **✅ Billing Buffer Time** - Grace period for billing calculations
+5. **✅ Extra Controller Pricing** - Configurable extra controller rates
+6. **✅ Bonus Calculation Fix** - Improved bonus tier logic (code-only, no DB changes)
+7. **✅ UI Improvements** - Button layout fixes (code-only, no DB changes)
+
+---
+
+## 📊 Database Changes Summary
+
+### New Tables Created:
+1. `admin_users` - Authentication system
+2. `pricing_rules` - Dynamic pricing configuration
+3. `bonus_config` - Bonus time configuration
+
+### Modified Tables:
+- None (all existing tables remain unchanged)
+
+### New Indexes:
+- `idx_admin_users_username` - Faster login lookups
+- `idx_bonus_config_data` - Faster bonus config queries
+
+---
+
+## 🚀 Migration Steps
+
+### **IMPORTANT: Run these scripts in ORDER**
+
+Execute these SQL commands in your Supabase Production SQL Editor:
+
+---
+
+### **Step 1: Create Authentication System**
+
+```sql
+-- ============================================================================
+-- 1. ADMIN USERS TABLE (Authentication)
+-- ============================================================================
+-- Creates admin authentication system with default credentials
+
+CREATE TABLE IF NOT EXISTS admin_users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password_hash VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  last_login TIMESTAMPTZ,
+  is_active BOOLEAN DEFAULT true
+);
+
+-- Create index for faster username lookups
+CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+
+-- Insert default admin user
+-- Username: admin
+-- Password: admin2026
+-- IMPORTANT: Change this password immediately after first login!
+INSERT INTO admin_users (username, password_hash)
+VALUES (
+  'admin',
+  'f6e0a1e2ac41945a9aa7ff8a8aaa0cebc12a3bcc981a929ad5cf810a090e11ae'
+)
+ON CONFLICT (username) DO NOTHING;
+
+-- Verify admin user was created
+DO $$
+DECLARE
+  user_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO user_count FROM admin_users WHERE username = 'admin';
+  
+  IF user_count > 0 THEN
+    RAISE NOTICE '✅ Admin user created successfully';
+    RAISE NOTICE '   Username: admin';
+    RAISE NOTICE '   Password: admin2026';
+    RAISE NOTICE '   ⚠️  CHANGE THIS PASSWORD IMMEDIATELY!';
+  ELSE
+    RAISE WARNING '⚠️ Admin user was not created';
+  END IF;
+END $$;
+```
+
+---
+
+### **Step 2: Create Pricing Rules Table**
+
+```sql
+-- ============================================================================
+-- 2. PRICING RULES TABLE (Dynamic Pricing)
+-- ============================================================================
+-- Stores configurable pricing for different game types and day types
+
+CREATE TABLE IF NOT EXISTS pricing_rules (
+  game_type VARCHAR(50) PRIMARY KEY,
+  weekday_rate INTEGER NOT NULL DEFAULT 0,
+  weekend_rate INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  updated_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
+);
+
+-- Insert default pricing rules
+INSERT INTO pricing_rules (game_type, weekday_rate, weekend_rate) VALUES
+  ('Playstation', 150, 200),
+  ('Steering Wheel', 150, 150),
+  ('System', 100, 100),
+  ('buffer_minutes', 10, 10),
+  ('extra_controller', 50, 50)
+ON CONFLICT (game_type) DO NOTHING;
+
+-- Verify pricing rules were created
+DO $$
+DECLARE
+  rule_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO rule_count FROM pricing_rules;
+  
+  IF rule_count >= 5 THEN
+    RAISE NOTICE '✅ Pricing rules created successfully';
+    RAISE NOTICE '   Total rules: %', rule_count;
+  ELSE
+    RAISE WARNING '⚠️ Expected 5 pricing rules, found %', rule_count;
+  END IF;
+END $$;
+```
+
+---
+
+### **Step 3: Create Bonus Configuration Table**
+
+```sql
+-- ============================================================================
+-- 3. BONUS CONFIG TABLE (Bonus Time Configuration)
+-- ============================================================================
+-- Stores configurable bonus time for different game types and day types
+
+CREATE TABLE IF NOT EXISTS bonus_config (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  config_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  updated_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  CONSTRAINT single_row_check CHECK (id = 1)
+);
+
+-- Create GIN index for faster JSONB queries
+CREATE INDEX IF NOT EXISTS idx_bonus_config_data 
+ON bonus_config USING gin (config_data);
+
+-- Add table and column comments
+COMMENT ON TABLE bonus_config IS 'Stores bonus time configuration for different game types';
+COMMENT ON COLUMN bonus_config.config_data IS 'JSONB: {gameType: {dayType: {oneHour: seconds, twoHours: seconds, threeHours: seconds}}}';
+
+-- Insert default bonus configuration
+-- oneHour: 900 seconds (15 minutes)
+-- twoHours: 1800 seconds (30 minutes)
+-- threeHours: 3600 seconds (1 hour)
+INSERT INTO bonus_config (id, config_data)
+VALUES (
+  1,
+  '{
+    "Playstation": {
+      "weekday": {"oneHour": 900, "twoHours": 1800, "threeHours": 3600},
+      "weekend": {"oneHour": 0, "twoHours": 0, "threeHours": 0}
+    },
+    "Steering Wheel": {
+      "weekday": {"oneHour": 900, "twoHours": 1800, "threeHours": 3600},
+      "weekend": {"oneHour": 0, "twoHours": 0, "threeHours": 0}
+    },
+    "System": {
+      "weekday": {"oneHour": 900, "twoHours": 1800, "threeHours": 3600},
+      "weekend": {"oneHour": 900, "twoHours": 1800, "threeHours": 3600}
+    }
+  }'::jsonb
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- Verify bonus config was created
+DO $$
+DECLARE
+  config_exists BOOLEAN;
+BEGIN
+  SELECT EXISTS(SELECT 1 FROM bonus_config WHERE id = 1) INTO config_exists;
+  
+  IF config_exists THEN
+    RAISE NOTICE '✅ Bonus configuration created successfully';
+  ELSE
+    RAISE WARNING '⚠️ Bonus configuration was not created';
+  END IF;
+END $$;
+```
+
+---
+
+### **Step 4: Verification & Summary**
+
+```sql
+-- ============================================================================
+-- 4. VERIFICATION QUERIES
+-- ============================================================================
+
+-- Verify all new tables exist
+DO $$
+DECLARE
+  table_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO table_count
+  FROM information_schema.tables
+  WHERE table_schema = 'public'
+  AND table_name IN ('admin_users', 'pricing_rules', 'bonus_config');
+  
+  IF table_count = 3 THEN
+    RAISE NOTICE '✅ All 3 new tables created successfully';
+  ELSE
+    RAISE WARNING '⚠️ Expected 3 new tables, found %', table_count;
+  END IF;
+END $$;
+
+-- Display migration summary
+DO $$
+DECLARE
+  admin_count INTEGER;
+  pricing_count INTEGER;
+  bonus_exists BOOLEAN;
+BEGIN
+  SELECT COUNT(*) INTO admin_count FROM admin_users;
+  SELECT COUNT(*) INTO pricing_count FROM pricing_rules;
+  SELECT EXISTS(SELECT 1 FROM bonus_config WHERE id = 1) INTO bonus_exists;
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════════════';
+  RAISE NOTICE '           PRODUCTION MIGRATION SUMMARY                    ';
+  RAISE NOTICE '═══════════════════════════════════════════════════════════';
+  RAISE NOTICE 'Admin Users:       % created', admin_count;
+  RAISE NOTICE 'Pricing Rules:     % created', pricing_count;
+  RAISE NOTICE 'Bonus Config:      %', CASE WHEN bonus_exists THEN 'Created' ELSE 'Missing' END;
+  RAISE NOTICE '═══════════════════════════════════════════════════════════';
+  RAISE NOTICE '';
+END $$;
+
+-- Final success message
+SELECT 
+  '✅ Production database migration completed successfully!' as status,
+  'Version 2.0 - From commit 687b0a5 to latest' as version,
+  NOW() AT TIME ZONE 'Asia/Kolkata' as completed_at;
+```
+
+---
+
+## 🔐 Default Credentials
+
+After running the migration, you will have the following default credentials:
+
+**Admin Login:**
+- **Username:** `admin`
+- **Password:** `admin2026`
+
+**⚠️ CRITICAL SECURITY WARNING:**
+- Change this password IMMEDIATELY after first login!
+- Use the "Change Password" feature in the dashboard
+- Never use default passwords in production
+
+---
+
+## 📝 Configuration Details
+
+### **Pricing Rules (pricing_rules table)**
+
+| Game Type | Weekday Rate | Weekend Rate | Description |
+|-----------|--------------|--------------|-------------|
+| Playstation | ₹150/hr | ₹200/hr | PlayStation gaming stations |
+| Steering Wheel | ₹150/hr | ₹150/hr | Steering wheel stations |
+| System | ₹100/hr | ₹100/hr | General system rate |
+| buffer_minutes | 10 min | 10 min | Billing grace period |
+| extra_controller | ₹50 | ₹50 | Extra controller charge |
+
+### **Bonus Time Configuration (bonus_config table)**
+
+**Weekday Bonus (Playstation & Steering Wheel):**
+- 1 hour played → 15 minutes bonus
+- 2 hours played → 30 minutes bonus
+- 3+ hours played → 1 hour bonus
+
+**Weekend Bonus (Playstation & Steering Wheel):**
+- No bonus on weekends
+
+**System Bonus (All Days):**
+- 1 hour played → 15 minutes bonus
+- 2 hours played → 30 minutes bonus
+- 3+ hours played → 1 hour bonus
+
+---
+
+## ✅ Post-Migration Checklist
+
+After running the migration, verify the following:
+
+- [ ] All 3 new tables created (`admin_users`, `pricing_rules`, `bonus_config`)
+- [ ] Default admin user exists (username: `admin`)
+- [ ] 5 pricing rules inserted (Playstation, Steering Wheel, System, buffer_minutes, extra_controller)
+- [ ] Bonus configuration exists with default values
+- [ ] All indexes created successfully
+- [ ] No errors in migration output
+- [ ] Test login with default credentials
+- [ ] Change admin password immediately
+- [ ] Verify pricing configuration in dashboard
+- [ ] Verify bonus configuration in dashboard
+- [ ] Test a complete booking flow
+
+---
+
+## 🔄 Code Changes (No Database Migration Required)
+
+The following features were implemented in code only and require NO database changes:
+
+### **1. Bonus Calculation Fix**
+- **File:** `src/utils/pricing.js`
+- **Changes:**
+  - Fixed bonus tier logic (1h→15min, 2h→30min, 3h→1hr)
+  - Implemented smart buffer logic (5min with bonus, 10min without)
+  - Corrected cost calculation to properly subtract bonus time
+
+### **2. UI Button Layout Fix**
+- **File:** `src/components/StationCard.jsx`
+- **Changes:**
+  - Made all buttons equal size using `flex-1`
+  - Reduced button gap and padding
+  - Ensured Reset button stays within card boundaries
+
+These changes are already deployed via Vercel and will work immediately after the database migration.
+
+---
+
+## 🚨 Troubleshooting
+
+### **Issue: Admin user not created**
+```sql
+-- Check if user exists
+SELECT * FROM admin_users WHERE username = 'admin';
+
+-- If missing, manually insert:
+INSERT INTO admin_users (username, password_hash)
+VALUES ('admin', 'f6e0a1e2ac41945a9aa7ff8a8aaa0cebc12a3bcc981a929ad5cf810a090e11ae');
+```
+
+### **Issue: Pricing rules missing**
+```sql
+-- Check pricing rules
+SELECT * FROM pricing_rules;
+
+-- If missing, re-run Step 2
+```
+
+### **Issue: Bonus config missing**
+```sql
+-- Check bonus config
+SELECT * FROM bonus_config;
+
+-- If missing, re-run Step 3
+```
+
+---
+
+## 📞 Support
+
+If you encounter any issues during migration:
+
+1. **Check the verification queries** - They will tell you exactly what's missing
+2. **Review error messages** - SQL errors are usually descriptive
+3. **Test in preview environment first** - Always test migrations before production
+4. **Backup your database** - Before running any migration
+
+---
+
+## ✨ Summary
+
+This migration adds three new tables to enable:
+1. ✅ Secure admin authentication
+2. ✅ Dynamic pricing configuration
+3. ✅ Configurable bonus time system
+4. ✅ Billing buffer management
+5. ✅ Extra controller pricing
+
+**Total Migration Time:** ~2-3 minutes
+**Downtime Required:** None (all changes are additive)
+**Rollback Strategy:** Simply don't use the new features; old functionality remains intact
+
+---
+
+**Migration prepared by:** Antigravity AI
+**Date:** 2025-01-29
+**Version:** 2.0
+**Status:** ✅ Ready for Production

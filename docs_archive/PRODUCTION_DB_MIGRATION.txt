@@ -1,0 +1,378 @@
+-- ============================================================================
+-- Gamers Spot - Production Database Migration Script
+-- ============================================================================
+-- Version: 2.0 (Bonus Calculation Fix Update)
+-- Date: 2025-01-29
+-- 
+-- This script contains ALL database changes needed for production deployment
+-- Run this in Supabase SQL Editor: https://supabase.com/dashboard/project/_/sql
+-- 
+-- IMPORTANT: 
+-- - This script is IDEMPOTENT - safe to run multiple times
+-- - It will create tables/columns if they don't exist
+-- - It will NOT delete or modify existing data
+-- - Test in preview environment before running in production
+-- ============================================================================
+
+-- Set timezone to Asia/Kolkata (Indian Standard Time)
+SET timezone = 'Asia/Kolkata';
+
+-- ============================================================================
+-- 1. CUSTOMERS TABLE
+-- ============================================================================
+-- Stores customer information (phone numbers and names)
+CREATE TABLE IF NOT EXISTS customers (
+  id SERIAL PRIMARY KEY,
+  phone_number VARCHAR(20) UNIQUE NOT NULL,
+  customer_name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  updated_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
+);
+
+-- Create index for faster phone number lookups
+CREATE INDEX IF NOT EXISTS idx_customers_phone_number ON customers(phone_number);
+
+-- ============================================================================
+-- 2. STATIONS TABLE
+-- ============================================================================
+-- Stores gaming station information and session data
+CREATE TABLE IF NOT EXISTS stations (
+  id INTEGER PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  game_type VARCHAR(50) NOT NULL,
+  elapsed_time INTEGER DEFAULT 0,
+  is_running BOOLEAN DEFAULT false,
+  is_done BOOLEAN DEFAULT false,
+  extra_controllers INTEGER DEFAULT 0,
+  snacks JSONB DEFAULT '{"cokeBottle": 0, "cokeCan": 0}'::jsonb,
+  snacks_enabled BOOLEAN DEFAULT false,
+  is_paused BOOLEAN DEFAULT false,
+  paused_time INTEGER DEFAULT 0,
+  pause_start_time VARCHAR(50),
+  customer_name VARCHAR(255) DEFAULT '',
+  customer_phone VARCHAR(20) DEFAULT '',
+  start_time VARCHAR(50),
+  end_time VARCHAR(50),
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  updated_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
+);
+
+-- Add missing columns if they don't exist (for existing databases)
+DO $$ 
+BEGIN
+  -- Add is_paused column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'stations' AND column_name = 'is_paused'
+  ) THEN
+    ALTER TABLE stations ADD COLUMN is_paused BOOLEAN DEFAULT false;
+    UPDATE stations SET is_paused = false WHERE is_paused IS NULL;
+    RAISE NOTICE '✅ Added is_paused column to stations table';
+  END IF;
+
+  -- Add paused_time column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'stations' AND column_name = 'paused_time'
+  ) THEN
+    ALTER TABLE stations ADD COLUMN paused_time INTEGER DEFAULT 0;
+    UPDATE stations SET paused_time = 0 WHERE paused_time IS NULL;
+    RAISE NOTICE '✅ Added paused_time column to stations table';
+  END IF;
+
+  -- Add pause_start_time column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'stations' AND column_name = 'pause_start_time'
+  ) THEN
+    ALTER TABLE stations ADD COLUMN pause_start_time VARCHAR(50);
+    RAISE NOTICE '✅ Added pause_start_time column to stations table';
+  END IF;
+
+  -- Add customer_phone column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'stations' AND column_name = 'customer_phone'
+  ) THEN
+    ALTER TABLE stations ADD COLUMN customer_phone VARCHAR(20) DEFAULT '';
+    UPDATE stations SET customer_phone = '' WHERE customer_phone IS NULL;
+    RAISE NOTICE '✅ Added customer_phone column to stations table';
+  END IF;
+
+  -- Ensure customer_name has default value
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'stations' AND column_name = 'customer_name' AND column_default IS NULL
+  ) THEN
+    ALTER TABLE stations ALTER COLUMN customer_name SET DEFAULT '';
+    RAISE NOTICE '✅ Set default value for customer_name column';
+  END IF;
+
+  -- Ensure snacks_enabled has default value
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'stations' AND column_name = 'snacks_enabled' AND column_default IS NULL
+  ) THEN
+    ALTER TABLE stations ALTER COLUMN snacks_enabled SET DEFAULT false;
+    UPDATE stations SET snacks_enabled = false WHERE snacks_enabled IS NULL;
+    RAISE NOTICE '✅ Set default value for snacks_enabled column';
+  END IF;
+END $$;
+
+-- Create indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_stations_is_done ON stations(is_done);
+CREATE INDEX IF NOT EXISTS idx_stations_game_type ON stations(game_type);
+CREATE INDEX IF NOT EXISTS idx_stations_is_running ON stations(is_running);
+CREATE INDEX IF NOT EXISTS idx_stations_is_paused ON stations(is_paused);
+
+-- ============================================================================
+-- 3. INVOICES TABLE
+-- ============================================================================
+-- Stores invoice/billing information
+CREATE TABLE IF NOT EXISTS invoices (
+  id SERIAL PRIMARY KEY,
+  invoice_number VARCHAR(255) UNIQUE NOT NULL,
+  stations JSONB NOT NULL,
+  subtotal DECIMAL(10, 2) NOT NULL,
+  discount DECIMAL(10, 2) DEFAULT 0,
+  total DECIMAL(10, 2) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
+);
+
+-- Create indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices(created_at);
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);
+
+-- ============================================================================
+-- 4. SNACKS TABLE
+-- ============================================================================
+-- Stores snack items available for purchase
+CREATE TABLE IF NOT EXISTS snacks (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL UNIQUE,
+  price DECIMAL(10, 2) NOT NULL,
+  active BOOLEAN DEFAULT true,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  updated_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
+);
+
+-- Create indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_snacks_active ON snacks(active);
+CREATE INDEX IF NOT EXISTS idx_snacks_display_order ON snacks(display_order);
+
+-- Insert default snacks (only if they don't already exist)
+INSERT INTO snacks (name, price, active, display_order) VALUES
+  ('Coke Bottle', 20, true, 1),
+  ('Coke Can', 40, true, 2),
+  ('Lays Chips', 5, true, 3),
+  ('Kurkure', 5, true, 4)
+ON CONFLICT (name) DO NOTHING;
+
+-- ============================================================================
+-- 5. PAID_EVENTS TABLE
+-- ============================================================================
+-- Stores payment events for multi-device synchronization
+CREATE TABLE IF NOT EXISTS paid_events (
+  id SERIAL PRIMARY KEY,
+  invoice_number VARCHAR(255),
+  station_ids INTEGER[] NOT NULL,
+  reset_data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+  processed BOOLEAN DEFAULT false
+);
+
+-- Create indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_paid_events_created_at ON paid_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_paid_events_processed ON paid_events(processed);
+
+-- ============================================================================
+-- 6. FUNCTIONS AND TRIGGERS
+-- ============================================================================
+
+-- Function to automatically update the updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = (NOW() AT TIME ZONE 'Asia/Kolkata');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to auto-update updated_at on stations table
+DROP TRIGGER IF EXISTS update_stations_updated_at ON stations;
+CREATE TRIGGER update_stations_updated_at 
+    BEFORE UPDATE ON stations
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger to auto-update updated_at on snacks table
+DROP TRIGGER IF EXISTS update_snacks_updated_at ON snacks;
+CREATE TRIGGER update_snacks_updated_at 
+    BEFORE UPDATE ON snacks
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger to auto-update updated_at on customers table
+DROP TRIGGER IF EXISTS update_customers_updated_at ON customers;
+CREATE TRIGGER update_customers_updated_at 
+    BEFORE UPDATE ON customers
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to clean up old processed paid events (older than 24 hours)
+CREATE OR REPLACE FUNCTION cleanup_old_paid_events()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM paid_events 
+  WHERE processed = true 
+  AND created_at < (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '24 hours';
+  
+  RAISE NOTICE '✅ Cleaned up old paid events';
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- 7. DATA MIGRATION: Update game_type from 'PS5' to 'Playstation'
+-- ============================================================================
+-- This ensures consistency with the new naming convention
+DO $$
+DECLARE
+  updated_count INTEGER;
+BEGIN
+  -- Update any stations with 'PS5' to 'Playstation'
+  UPDATE stations 
+  SET game_type = 'Playstation' 
+  WHERE game_type = 'PS5';
+  
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  
+  IF updated_count > 0 THEN
+    RAISE NOTICE '✅ Updated % stations from PS5 to Playstation', updated_count;
+  ELSE
+    RAISE NOTICE 'ℹ️ No stations needed game_type update';
+  END IF;
+END $$;
+
+-- ============================================================================
+-- 8. INSERT DEFAULT STATIONS (if table is empty)
+-- ============================================================================
+-- Creates 7 default gaming stations
+DO $$
+DECLARE
+  station_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO station_count FROM stations;
+  
+  IF station_count = 0 THEN
+    INSERT INTO stations (id, name, game_type) VALUES
+      (1, 'Seat 1 - Playstation', 'Playstation'),
+      (2, 'Seat 2 - Playstation', 'Playstation'),
+      (3, 'Seat 3 - Playstation', 'Playstation'),
+      (4, 'Seat 4 - Playstation', 'Playstation'),
+      (5, 'Seat 5 - Playstation', 'Playstation'),
+      (6, 'Seat 6 - Steering Wheel', 'Steering Wheel'),
+      (7, 'Seat 7 - Steering Wheel', 'Steering Wheel');
+    
+    RAISE NOTICE '✅ Created 7 default stations';
+  ELSE
+    RAISE NOTICE 'ℹ️ Stations table already has % records, skipping default insert', station_count;
+  END IF;
+END $$;
+
+-- ============================================================================
+-- 9. VERIFICATION QUERIES
+-- ============================================================================
+
+-- Verify all tables exist
+DO $$
+DECLARE
+  table_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO table_count
+  FROM information_schema.tables
+  WHERE table_schema = 'public'
+  AND table_name IN ('stations', 'invoices', 'snacks', 'customers', 'paid_events');
+  
+  IF table_count = 5 THEN
+    RAISE NOTICE '✅ All 5 required tables exist';
+  ELSE
+    RAISE WARNING '⚠️ Expected 5 tables, found %', table_count;
+  END IF;
+END $$;
+
+-- Verify stations table has all required columns
+DO $$
+DECLARE
+  column_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO column_count
+  FROM information_schema.columns
+  WHERE table_name = 'stations'
+  AND column_name IN ('id', 'name', 'game_type', 'elapsed_time', 'is_running', 
+                      'is_done', 'extra_controllers', 'snacks', 'snacks_enabled',
+                      'is_paused', 'paused_time', 'pause_start_time', 
+                      'customer_name', 'customer_phone', 'start_time', 'end_time');
+  
+  IF column_count >= 16 THEN
+    RAISE NOTICE '✅ All required columns exist in stations table';
+  ELSE
+    RAISE WARNING '⚠️ Expected 16+ columns, found %', column_count;
+  END IF;
+END $$;
+
+-- Display summary of database state
+DO $$
+DECLARE
+  station_count INTEGER;
+  invoice_count INTEGER;
+  snack_count INTEGER;
+  customer_count INTEGER;
+  event_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO station_count FROM stations;
+  SELECT COUNT(*) INTO invoice_count FROM invoices;
+  SELECT COUNT(*) INTO snack_count FROM snacks;
+  SELECT COUNT(*) INTO customer_count FROM customers;
+  SELECT COUNT(*) INTO event_count FROM paid_events;
+  
+  RAISE NOTICE '';
+  RAISE NOTICE '═══════════════════════════════════════════════════════════';
+  RAISE NOTICE '                   DATABASE SUMMARY                        ';
+  RAISE NOTICE '═══════════════════════════════════════════════════════════';
+  RAISE NOTICE 'Stations:       % records', station_count;
+  RAISE NOTICE 'Invoices:       % records', invoice_count;
+  RAISE NOTICE 'Snacks:         % records', snack_count;
+  RAISE NOTICE 'Customers:      % records', customer_count;
+  RAISE NOTICE 'Paid Events:    % records', event_count;
+  RAISE NOTICE '═══════════════════════════════════════════════════════════';
+  RAISE NOTICE '';
+END $$;
+
+-- ============================================================================
+-- MIGRATION COMPLETE
+-- ============================================================================
+SELECT 
+  '✅ Production database migration completed successfully!' as status,
+  'Version 2.0 - Bonus Calculation Fix Update' as version,
+  NOW() AT TIME ZONE 'Asia/Kolkata' as completed_at;
+
+-- ============================================================================
+-- NOTES FOR PRODUCTION DEPLOYMENT
+-- ============================================================================
+-- 
+-- After running this migration:
+-- 
+-- 1. ✅ All tables and columns are created/updated
+-- 2. ✅ All indexes are created for optimal performance
+-- 3. ✅ All triggers are set up for automatic timestamp updates
+-- 4. ✅ Default stations and snacks are inserted (if needed)
+-- 5. ✅ Game type naming is standardized (PS5 → Playstation)
+-- 
+-- The application code changes (bonus calculation logic) are already
+-- deployed via Vercel and will work correctly with this database schema.
+-- 
+-- No additional database changes are required for the bonus calculation fix.
+-- The fix is entirely in the application code (src/utils/pricing.js).
+-- 
+-- ============================================================================

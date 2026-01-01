@@ -1,0 +1,1010 @@
+================================================================================
+                    GAMERS SPOT - COMPLETE PROJECT DOCUMENTATION
+================================================================================
+Version: 2.0
+Last Updated: 2025-01-29
+Production Commit: 687b0a5353eb8ffa538a393918fa7dfa97aedbbf
+Latest Commit: b64bf29 (Test branch)
+================================================================================
+
+TABLE OF CONTENTS
+================================================================================
+1. PROJECT OVERVIEW
+2. TECHNICAL STACK
+3. PROJECT STRUCTURE
+4. DATABASE SCHEMA & MAPPING
+5. API ENDPOINTS
+6. FEATURES & FUNCTIONALITY
+7. ENVIRONMENT VARIABLES
+8. DEPLOYMENT INFORMATION
+9. RECENT CHANGES & UPDATES
+10. MIGRATION GUIDE (Production)
+11. TROUBLESHOOTING
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+Project Name: Gamers Spot - Gaming Station Management System
+Description: A comprehensive web application for managing gaming stations,
+             tracking play time, calculating costs with bonus time, and
+             generating invoices for a gaming cafe business.
+
+Business Model:
+- PlayStation and Steering Wheel gaming stations
+- Hourly billing with dynamic pricing (weekday/weekend rates)
+- Bonus time system (15min/30min/1hr based on play duration)
+- Extra controller charges
+- Snacks/beverages sales integration
+- Multi-device synchronization for real-time updates
+
+Target Users:
+- Gaming cafe owners/operators
+- Staff members managing gaming stations
+- Customers (indirect - through station booking)
+
+================================================================================
+2. TECHNICAL STACK
+================================================================================
+
+FRONTEND:
+- Framework: React 18.3.1 with Vite 5.4.2
+- UI Library: Custom CSS (no framework)
+- State Management: React Hooks (useState, useEffect)
+- Routing: React Router DOM 6.26.1
+- HTTP Client: Fetch API
+- Real-time Updates: Polling mechanism
+
+BACKEND:
+- Runtime: Node.js with Express.js 4.19.2
+- API Architecture: RESTful API
+- Server: Express with CORS enabled
+- Middleware: Body-parser, Cookie-parser
+
+DATABASE:
+- Primary: PostgreSQL (Supabase hosted)
+- Local Development: PostgreSQL via Docker
+- Connection Pool: node-postgres (pg 8.12.0)
+- ORM: None (Raw SQL queries)
+
+DEPLOYMENT:
+- Frontend & API: Vercel (Serverless Functions)
+- Database: Supabase (Production & Test environments)
+- Version Control: Git + GitHub
+- Branches: main (production), Test (preview)
+
+DEVELOPMENT TOOLS:
+- Package Manager: npm
+- Environment: dotenv for config management
+- Testing: Manual testing + custom test scripts
+- Code Editor: VS Code (recommended)
+
+================================================================================
+3. PROJECT STRUCTURE
+================================================================================
+
+Gamersspot/
+├── api/                          # Vercel serverless functions
+│   ├── auth.js                   # Authentication (login/logout)
+│   ├── customers.js              # Customer management
+│   ├── invoices.js               # Invoice generation
+│   ├── paid-events.js            # Multi-device sync events
+│   ├── reports.js                # Business reports
+│   ├── settings.js               # Pricing/bonus/snacks config
+│   ├── snacks.js                 # Snacks management (legacy)
+│   ├── stations.js               # Station CRUD operations
+│   ├── stations/
+│   │   └── transfer.js           # Station transfer functionality
+│   └── time.js                   # Server time sync
+│
+├── database/                     # Database schemas & migrations
+│   ├── schema.sql                # Core database schema
+│   ├── supabase_setup.sql        # Supabase production setup
+│   ├── supabase_test_setup.sql   # Supabase test environment
+│   ├── local_setup.sql           # Local Docker PostgreSQL
+│   ├── snacks_schema.sql         # Snacks table schema
+│   └── paid_events_schema.sql    # Paid events table schema
+│
+├── scripts/                      # Utility & migration scripts
+│   ├── setup-auth.mjs            # Create admin users table
+│   ├── setup-pricing-db.mjs      # Create pricing_rules table
+│   ├── setup-bonus-config.mjs    # Create bonus_config table
+│   ├── add-buffer-minutes.mjs    # Add billing buffer config
+│   ├── add-extra-controller-rate.mjs  # Add controller pricing
+│   ├── migrate-ps5-to-playstation.mjs # Game type migration
+│   ├── deploy-test.mjs           # Deploy to test environment
+│   └── reset-password.mjs        # Admin password reset
+│
+├── src/                          # React frontend source
+│   ├── components/               # React components
+│   │   ├── StationCard.jsx       # Gaming station UI card
+│   │   ├── PricingConfig.jsx     # Pricing configuration
+│   │   ├── BonusConfig.jsx       # Bonus time configuration
+│   │   ├── Login.jsx             # Admin login
+│   │   ├── ChangePassword.jsx    # Password management
+│   │   ├── Reports.jsx           # Business reports
+│   │   ├── TransferStations.jsx  # Station transfer UI
+│   │   └── ...
+│   ├── utils/                    # Utility functions
+│   │   ├── pricing.js            # Pricing & bonus calculations
+│   │   ├── api.js                # API client functions
+│   │   ├── timer.js              # Timer utilities
+│   │   └── storage.js            # Local storage management
+│   ├── App.jsx                   # Main application component
+│   ├── index.css                 # Global styles
+│   └── main.jsx                  # React entry point
+│
+├── public/                       # Static assets
+├── .env.local                    # Local environment variables
+├── .env.test                     # Test environment variables
+├── .env.prod                     # Production environment variables
+├── server.js                     # Express server (local dev)
+├── vercel.json                   # Vercel deployment config
+├── package.json                  # Dependencies & scripts
+└── vite.config.js                # Vite configuration
+
+================================================================================
+4. DATABASE SCHEMA & MAPPING
+================================================================================
+
+DATABASE: PostgreSQL (Supabase)
+TIMEZONE: Asia/Kolkata (IST)
+
+--------------------------------------------------------------------------------
+TABLE: stations
+--------------------------------------------------------------------------------
+Purpose: Stores gaming station information and session data
+Primary Key: id (INTEGER)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ INTEGER      │ NO       │ -                       │
+│ name                │ VARCHAR(255) │ NO       │ -                       │
+│ game_type           │ VARCHAR(50)  │ NO       │ -                       │
+│ elapsed_time        │ INTEGER      │ YES      │ 0                       │
+│ is_running          │ BOOLEAN      │ YES      │ false                   │
+│ is_done             │ BOOLEAN      │ YES      │ false                   │
+│ extra_controllers   │ INTEGER      │ YES      │ 0                       │
+│ snacks              │ JSONB        │ YES      │ {"cokeBottle":0,...}    │
+│ snacks_enabled      │ BOOLEAN      │ YES      │ false                   │
+│ is_paused           │ BOOLEAN      │ YES      │ false                   │
+│ paused_time         │ INTEGER      │ YES      │ 0                       │
+│ pause_start_time    │ VARCHAR(50)  │ YES      │ NULL                    │
+│ customer_name       │ VARCHAR(255) │ YES      │ ''                      │
+│ customer_phone      │ VARCHAR(20)  │ YES      │ ''                      │
+│ start_time          │ VARCHAR(50)  │ YES      │ NULL                    │
+│ end_time            │ VARCHAR(50)  │ YES      │ NULL                    │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+INDEXES:
+- idx_stations_is_done ON (is_done)
+- idx_stations_game_type ON (game_type)
+- idx_stations_is_running ON (is_running)
+- idx_stations_is_paused ON (is_paused)
+
+GAME TYPES:
+- 'Playstation' - PlayStation gaming stations
+- 'Steering Wheel' - Racing wheel stations
+- 'System' - Generic system type
+
+DEFAULT STATIONS (7 total):
+1. Seat 1 - Playstation
+2. Seat 2 - Playstation
+3. Seat 3 - Playstation
+4. Seat 4 - Playstation
+5. Seat 5 - Playstation
+6. Seat 6 - Steering Wheel
+7. Seat 7 - Steering Wheel
+
+--------------------------------------------------------------------------------
+TABLE: customers
+--------------------------------------------------------------------------------
+Purpose: Stores customer contact information
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ phone_number        │ VARCHAR(20)  │ NO       │ -                       │
+│ customer_name       │ VARCHAR(255) │ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (phone_number)
+
+INDEXES:
+- idx_customers_phone_number ON (phone_number)
+
+--------------------------------------------------------------------------------
+TABLE: invoices
+--------------------------------------------------------------------------------
+Purpose: Stores billing/invoice records
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ invoice_number      │ VARCHAR(255) │ NO       │ -                       │
+│ stations            │ JSONB        │ NO       │ -                       │
+│ subtotal            │ DECIMAL(10,2)│ NO       │ -                       │
+│ discount            │ DECIMAL(10,2)│ YES      │ 0                       │
+│ total               │ DECIMAL(10,2)│ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (invoice_number)
+
+INDEXES:
+- idx_invoices_created_at ON (created_at)
+- idx_invoices_invoice_number ON (invoice_number)
+
+INVOICE NUMBER FORMAT: INV-YYYYMMDD-HHMMSS-XXX
+Example: INV-20250129-143052-001
+
+--------------------------------------------------------------------------------
+TABLE: snacks
+--------------------------------------------------------------------------------
+Purpose: Stores snack/beverage items for sale
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ name                │ VARCHAR(255) │ NO       │ -                       │
+│ price               │ DECIMAL(10,2)│ NO       │ -                       │
+│ active              │ BOOLEAN      │ YES      │ true                    │
+│ display_order       │ INTEGER      │ YES      │ 0                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (name)
+
+INDEXES:
+- idx_snacks_active ON (active)
+- idx_snacks_display_order ON (display_order)
+
+DEFAULT SNACKS:
+1. Coke Bottle - ₹20
+2. Coke Can - ₹40
+3. Lays Chips - ₹5
+4. Kurkure - ₹5
+
+--------------------------------------------------------------------------------
+TABLE: paid_events
+--------------------------------------------------------------------------------
+Purpose: Multi-device synchronization for payment events
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ invoice_number      │ VARCHAR(255) │ YES      │ NULL                    │
+│ station_ids         │ INTEGER[]    │ NO       │ -                       │
+│ reset_data          │ JSONB        │ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+│ processed           │ BOOLEAN      │ YES      │ false                   │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+INDEXES:
+- idx_paid_events_created_at ON (created_at DESC)
+- idx_paid_events_processed ON (processed)
+
+PURPOSE: When payment is made on one device, this table broadcasts the reset
+         event to all other connected devices for real-time synchronization.
+
+--------------------------------------------------------------------------------
+TABLE: admin_users (NEW - Added after commit 687b0a5)
+--------------------------------------------------------------------------------
+Purpose: Admin authentication system
+Primary Key: id (SERIAL)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ SERIAL       │ NO       │ AUTO                    │
+│ username            │ VARCHAR(50)  │ NO       │ -                       │
+│ password_hash       │ VARCHAR(64)  │ NO       │ -                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+│ last_login          │ TIMESTAMPTZ  │ YES      │ NULL                    │
+│ is_active           │ BOOLEAN      │ YES      │ true                    │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- UNIQUE (username)
+
+INDEXES:
+- idx_admin_users_username ON (username)
+
+DEFAULT USER:
+- Username: admin
+- Password: admin2026 (SHA-256 hashed)
+- ⚠️ MUST CHANGE PASSWORD AFTER FIRST LOGIN!
+
+PASSWORD HASHING: SHA-256 (crypto.createHash('sha256'))
+
+--------------------------------------------------------------------------------
+TABLE: pricing_rules (NEW - Added after commit 687b0a5)
+--------------------------------------------------------------------------------
+Purpose: Dynamic pricing configuration
+Primary Key: game_type (VARCHAR)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ game_type           │ VARCHAR(50)  │ NO       │ -                       │
+│ weekday_rate        │ INTEGER      │ NO       │ 0                       │
+│ weekend_rate        │ INTEGER      │ NO       │ 0                       │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+DEFAULT PRICING RULES:
+┌──────────────────┬───────────────┬───────────────┐
+│ Game Type        │ Weekday Rate  │ Weekend Rate  │
+├──────────────────┼───────────────┼───────────────┤
+│ Playstation      │ ₹150/hr       │ ₹200/hr       │
+│ Steering Wheel   │ ₹150/hr       │ ₹150/hr       │
+│ System           │ ₹100/hr       │ ₹100/hr       │
+│ buffer_minutes   │ 10 min        │ 10 min        │
+│ extra_controller │ ₹50           │ ₹50           │
+└──────────────────┴───────────────┴───────────────┘
+
+SPECIAL ENTRIES:
+- 'buffer_minutes': Billing grace period (default: 10 minutes)
+- 'extra_controller': Extra controller charge per hour
+
+--------------------------------------------------------------------------------
+TABLE: bonus_config (NEW - Added after commit 687b0a5)
+--------------------------------------------------------------------------------
+Purpose: Configurable bonus time system
+Primary Key: id (INTEGER, always 1)
+
+COLUMNS:
+┌─────────────────────┬──────────────┬──────────┬─────────────────────────┐
+│ Column Name         │ Type         │ Nullable │ Default                 │
+├─────────────────────┼──────────────┼──────────┼─────────────────────────┤
+│ id                  │ INTEGER      │ NO       │ 1                       │
+│ config_data         │ JSONB        │ NO       │ '{}'::jsonb             │
+│ created_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+│ updated_at          │ TIMESTAMPTZ  │ YES      │ NOW() AT TZ 'Asia/...'  │
+└─────────────────────┴──────────────┴──────────┴─────────────────────────┘
+
+CONSTRAINTS:
+- CHECK (id = 1) - Ensures only one configuration row
+
+INDEXES:
+- idx_bonus_config_data ON (config_data) USING gin
+
+DEFAULT CONFIGURATION:
+{
+  "Playstation": {
+    "weekday": {
+      "oneHour": 900,      // 15 minutes (in seconds)
+      "twoHours": 1800,    // 30 minutes
+      "threeHours": 3600   // 1 hour
+    },
+    "weekend": {
+      "oneHour": 0,        // No bonus
+      "twoHours": 0,
+      "threeHours": 0
+    }
+  },
+  "Steering Wheel": {
+    "weekday": {
+      "oneHour": 900,
+      "twoHours": 1800,
+      "threeHours": 3600
+    },
+    "weekend": {
+      "oneHour": 0,
+      "twoHours": 0,
+      "threeHours": 0
+    }
+  },
+  "System": {
+    "weekday": {
+      "oneHour": 900,
+      "twoHours": 1800,
+      "threeHours": 3600
+    },
+    "weekend": {
+      "oneHour": 900,
+      "twoHours": 1800,
+      "threeHours": 3600
+    }
+  }
+}
+
+BONUS TIER LOGIC:
+- 1 hour played (1h-1h59m) → oneHour bonus
+- 2 hours played (2h-2h59m) → twoHours bonus
+- 3+ hours played → threeHours bonus
+
+================================================================================
+5. API ENDPOINTS
+================================================================================
+
+BASE URL (Local): http://localhost:3001
+BASE URL (Production): https://gamersspot.vercel.app
+
+--------------------------------------------------------------------------------
+AUTHENTICATION
+--------------------------------------------------------------------------------
+
+POST /api/auth
+  Description: Admin login
+  Body: { username: string, password: string }
+  Response: { success: boolean, message: string }
+  Sets: HTTP-only cookie with session token
+
+POST /api/auth (with action=logout)
+  Description: Admin logout
+  Body: { action: 'logout' }
+  Response: { success: boolean }
+  Clears: Session cookie
+
+POST /api/auth (with action=change-password)
+  Description: Change admin password
+  Body: { action: 'change-password', currentPassword: string, newPassword: string }
+  Response: { success: boolean, message: string }
+  Requires: Valid session cookie
+
+--------------------------------------------------------------------------------
+STATIONS
+--------------------------------------------------------------------------------
+
+GET /api/stations
+  Description: Get all gaming stations
+  Response: Array of station objects
+  
+POST /api/stations
+  Description: Create new station
+  Body: { name: string, game_type: string }
+  Response: Created station object
+
+PUT /api/stations/:id
+  Description: Update station
+  Body: Station object with updated fields
+  Response: Updated station object
+
+DELETE /api/stations/:id
+  Description: Delete station (only if id > 7)
+  Response: { success: boolean }
+
+POST /api/stations/transfer
+  Description: Transfer session between stations
+  Body: { fromStationId: number, toStationId: number }
+  Response: { success: boolean, message: string }
+
+--------------------------------------------------------------------------------
+CUSTOMERS
+--------------------------------------------------------------------------------
+
+GET /api/customers
+  Description: Get all customers
+  Response: Array of customer objects
+
+POST /api/customers
+  Description: Create or update customer
+  Body: { phone_number: string, customer_name: string }
+  Response: Customer object
+
+--------------------------------------------------------------------------------
+INVOICES
+--------------------------------------------------------------------------------
+
+GET /api/invoices
+  Description: Get all invoices
+  Query: ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD (optional)
+  Response: Array of invoice objects
+
+POST /api/invoices
+  Description: Create new invoice
+  Body: { stations: array, subtotal: number, discount: number, total: number }
+  Response: Created invoice object
+
+--------------------------------------------------------------------------------
+SETTINGS (Consolidated Endpoint)
+--------------------------------------------------------------------------------
+
+GET /api/settings?type=pricing
+  Description: Get pricing rules
+  Response: Array of pricing rule objects
+
+PUT /api/settings?type=pricing
+  Description: Update pricing rules
+  Body: Array of pricing rule objects
+  Response: { success: boolean, data: updated rules }
+
+GET /api/settings?type=bonus
+  Description: Get bonus configuration
+  Response: Bonus config object
+
+PUT /api/settings?type=bonus
+  Description: Update bonus configuration
+  Body: { config_data: JSONB object }
+  Response: { success: boolean, data: updated config }
+
+GET /api/settings?type=snacks
+  Description: Get snacks list
+  Response: Array of snack objects
+
+PUT /api/settings?type=snacks
+  Description: Update snacks
+  Body: Array of snack objects
+  Response: { success: boolean, data: updated snacks }
+
+--------------------------------------------------------------------------------
+REPORTS
+--------------------------------------------------------------------------------
+
+GET /api/reports
+  Description: Get business reports
+  Query: ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&reportType=daily|monthly
+  Response: Report data object with revenue, bookings, etc.
+
+--------------------------------------------------------------------------------
+PAID EVENTS (Multi-device Sync)
+--------------------------------------------------------------------------------
+
+GET /api/paid-events
+  Description: Get unprocessed paid events
+  Response: Array of paid event objects
+
+POST /api/paid-events
+  Description: Create paid event (broadcast reset)
+  Body: { invoice_number: string, station_ids: array, reset_data: object }
+  Response: Created event object
+
+PUT /api/paid-events/:id
+  Description: Mark event as processed
+  Response: { success: boolean }
+
+--------------------------------------------------------------------------------
+TIME SYNC
+--------------------------------------------------------------------------------
+
+GET /api/time
+  Description: Get server time (IST timezone)
+  Response: { serverTime: ISO string, timezone: 'Asia/Kolkata' }
+
+================================================================================
+6. FEATURES & FUNCTIONALITY
+================================================================================
+
+CORE FEATURES:
+--------------------------------------------------------------------------------
+
+1. STATION MANAGEMENT
+   - Create, read, update, delete gaming stations
+   - Support for multiple game types (Playstation, Steering Wheel)
+   - Real-time timer tracking with pause/resume
+   - Session transfer between stations
+   - Multi-device synchronization
+
+2. PRICING SYSTEM
+   - Dynamic pricing based on game type
+   - Weekday vs Weekend rates
+   - Configurable via admin dashboard
+   - Extra controller charges
+   - Billing buffer time (grace period)
+
+3. BONUS TIME SYSTEM
+   - Tier-based bonus (15min/30min/1hr)
+   - Configurable per game type and day type
+   - Automatic calculation based on play duration
+   - Disabled when snacks are purchased
+   - Smart buffer logic:
+     * 5-minute buffer when bonus is active
+     * 10-minute buffer when no bonus
+
+4. BILLING & INVOICING
+   - Automatic cost calculation
+   - Bonus time deduction
+   - Extra controller charges
+   - Snacks/beverages integration
+   - Discount support
+   - Invoice generation with unique numbers
+   - Invoice history and reports
+
+5. AUTHENTICATION & SECURITY
+   - Admin login system
+   - Password hashing (SHA-256)
+   - Session management with HTTP-only cookies
+   - Password change functionality
+   - Protected admin routes
+
+6. REPORTING & ANALYTICS
+   - Daily/Monthly revenue reports
+   - Booking statistics
+   - Customer analytics
+   - Date range filtering
+   - Export capabilities
+
+7. MULTI-DEVICE SYNC
+   - Real-time updates across devices
+   - Paid events broadcasting
+   - Automatic station reset synchronization
+   - Polling-based updates (every 5 seconds)
+
+BUSINESS LOGIC:
+--------------------------------------------------------------------------------
+
+PRICING CALCULATION:
+1. Get base rate (weekday/weekend based on current day)
+2. Calculate total hours played
+3. Calculate bonus time (if applicable)
+4. Subtract bonus from total time = billable time
+5. Apply billing buffer:
+   - If bonus > 0: Use 5-minute buffer
+   - If bonus = 0: Use configurable buffer (default: 10 min)
+6. Round up billable time to nearest hour
+7. Add extra controller charges
+8. Add snacks charges
+9. Apply discount (if any)
+10. Generate final total
+
+BONUS CALCULATION LOGIC:
+- Check if snacks are enabled (if yes, no bonus)
+- Get total hours played (not billable hours)
+- Determine tier:
+  * 1h to 1h 59m → Tier 1 (15 minutes)
+  * 2h to 2h 59m → Tier 2 (30 minutes)
+  * 3h or more → Tier 3 (1 hour)
+- Return bonus time in seconds
+
+BUFFER LOGIC:
+- Purpose: Prevent charging full extra hour for small overages
+- When bonus > 0: 5-minute buffer
+  Example: 1h 4m with 15min bonus → 49min billable → charge 1hr (not 2hr)
+- When bonus = 0: 10-minute buffer (configurable)
+  Example: 1h 8m → charge 1hr (not 2hr)
+
+WEEKEND DETECTION:
+- Saturday (day 6) and Sunday (day 0)
+- Uses JavaScript Date.getDay()
+- Affects pricing and bonus availability
+
+================================================================================
+7. ENVIRONMENT VARIABLES
+================================================================================
+
+LOCAL DEVELOPMENT (.env.local):
+--------------------------------------------------------------------------------
+POSTGRES_URL=postgresql://user:password@localhost:5434/Gamersspot-local
+PORT=3001
+NODE_ENV=development
+
+TEST ENVIRONMENT (.env.test):
+--------------------------------------------------------------------------------
+TEST_POSTGRES_URL=postgresql://user:password@host/database
+POSTGRES_URL=${TEST_POSTGRES_URL}
+NODE_ENV=test
+
+PRODUCTION ENVIRONMENT (.env.prod):
+--------------------------------------------------------------------------------
+POSTGRES_URL=postgresql://user:password@host/database
+NODE_ENV=production
+
+VERCEL ENVIRONMENT VARIABLES:
+--------------------------------------------------------------------------------
+Production:
+- POSTGRES_URL → Production Supabase connection string
+- NODE_ENV → production
+
+Preview (Test branch):
+- TEST_POSTGRES_URL → Test Supabase connection string
+- POSTGRES_URL → ${TEST_POSTGRES_URL}
+- NODE_ENV → preview
+
+================================================================================
+8. DEPLOYMENT INFORMATION
+================================================================================
+
+DEPLOYMENT PLATFORMS:
+--------------------------------------------------------------------------------
+
+VERCEL (Frontend + API):
+- Repository: GitHub (ponraj1990/Gamersspot)
+- Production Branch: main
+- Preview Branch: Test
+- Build Command: npm run build
+- Output Directory: dist
+- Serverless Functions: api/*
+- Function Limit: 12 (Hobby plan)
+
+SUPABASE (Database):
+- Production Database: Gamersspot (main)
+- Test Database: Gamersspot-test
+- Region: Asia Pacific (Mumbai)
+- Connection Pooling: Enabled
+- SSL: Required
+
+DEPLOYMENT WORKFLOW:
+--------------------------------------------------------------------------------
+
+1. LOCAL DEVELOPMENT:
+   - Run: npm run dev:all
+   - Frontend: http://localhost:5173
+   - Backend: http://localhost:3001
+   - Database: Docker PostgreSQL (port 5434)
+
+2. TEST DEPLOYMENT:
+   - Push to 'Test' branch
+   - Vercel auto-deploys preview
+   - Uses TEST_POSTGRES_URL
+   - Preview URL: https://gamersspot-*.vercel.app
+
+3. PRODUCTION DEPLOYMENT:
+   - Merge Test → main
+   - Vercel auto-deploys production
+   - Uses POSTGRES_URL
+   - Production URL: https://gamersspot.vercel.app
+
+DEPLOYMENT SCRIPTS:
+--------------------------------------------------------------------------------
+npm run dev          # Frontend only (Vite)
+npm run dev:server   # Backend only (Express)
+npm run dev:all      # Both frontend & backend
+npm run build        # Build for production
+npm run preview      # Preview production build
+
+================================================================================
+9. RECENT CHANGES & UPDATES
+================================================================================
+
+CHANGES AFTER COMMIT 687b0a5 (Production):
+--------------------------------------------------------------------------------
+
+COMMIT: c76353e - Local database setup changes
+- Updated local_setup.sql for Docker PostgreSQL
+
+COMMIT: de0f524 - Centralized pricing layout and database setup
+- Added pricing_rules table
+- Created setup-pricing-db.mjs script
+- Implemented dynamic pricing configuration
+- Added station transfer functionality
+- Migrated PS5 → Playstation naming
+
+COMMIT: 8b4f29e - Remove unused API endpoints
+- Deleted api/cleanup.js
+- Deleted api/whatsapp.js
+- Reduced to 12 serverless functions (Vercel limit)
+
+COMMIT: fc74a3c - Relocate transfer API
+- Moved api/transfer.js → api/stations/transfer.js
+- Better route organization
+
+COMMIT: c790b39 - Dynamic pricing, bonus time, and authentication
+- Added admin_users table
+- Added bonus_config table
+- Implemented authentication system
+- Created BonusConfig component
+- Added password management
+- Created setup scripts for auth and bonus
+
+COMMIT: 2b88d8c - Consolidate API endpoints
+- Merged api/pricing.js, api/bonus.js, api/snacks.js → api/settings.js
+- Merged api/auth/login.js, api/auth/logout.js → api/auth.js
+- Reduced serverless function count
+
+COMMIT: 37a6adc - Fix bonus calculation logic
+- Fixed bonus tier boundaries (1h→15min, 2h→30min, 3h→1hr)
+- Corrected getBonusTime() function
+- Improved calculatePaidHours() with buffer logic
+
+COMMIT: b64bf29 - Fix station card button layout (LATEST)
+- Made all buttons equal size (flex-1)
+- Reduced button gap and padding
+- Ensured Reset button stays within card boundaries
+
+KEY IMPROVEMENTS:
+--------------------------------------------------------------------------------
+
+1. BONUS CALCULATION FIX:
+   - Previous: Incorrect tier calculation
+   - Current: Correct tier based on hours played
+   - Impact: Customers get accurate bonus time
+
+2. BUFFER LOGIC ENHANCEMENT:
+   - Previous: 10-minute buffer always
+   - Current: 5-minute buffer with bonus, 10-minute without
+   - Impact: Fairer billing for customers
+
+3. AUTHENTICATION SYSTEM:
+   - Previous: No authentication
+   - Current: Secure admin login with password management
+   - Impact: Protected admin features
+
+4. DYNAMIC CONFIGURATION:
+   - Previous: Hardcoded pricing and bonus
+   - Current: Database-driven, configurable via UI
+   - Impact: Easy to adjust rates without code changes
+
+5. UI IMPROVEMENTS:
+   - Previous: Button overflow issues
+   - Current: Clean, uniform button layout
+   - Impact: Better user experience
+
+================================================================================
+10. MIGRATION GUIDE (Production Database)
+================================================================================
+
+CURRENT PRODUCTION: Commit 687b0a5
+TARGET VERSION: Latest (Commit b64bf29)
+
+REQUIRED DATABASE CHANGES:
+--------------------------------------------------------------------------------
+
+NEW TABLES TO CREATE:
+1. admin_users - Authentication system
+2. pricing_rules - Dynamic pricing
+3. bonus_config - Bonus configuration
+
+NO CHANGES TO EXISTING TABLES
+
+MIGRATION STEPS:
+--------------------------------------------------------------------------------
+
+Step 1: Create admin_users table
+Step 2: Create pricing_rules table
+Step 3: Create bonus_config table
+Step 4: Verify all tables created
+Step 5: Test authentication
+Step 6: Change default password
+
+DETAILED SQL MIGRATION SCRIPT:
+See file: PRODUCTION_DB_MIGRATION.txt
+
+MIGRATION EXECUTION:
+1. Backup production database
+2. Open Supabase SQL Editor
+3. Copy SQL from PRODUCTION_DB_MIGRATION.txt
+4. Execute the script
+5. Verify using verification queries
+6. Test login with admin/admin2026
+7. Change password immediately
+
+DEFAULT CREDENTIALS AFTER MIGRATION:
+Username: admin
+Password: admin2026
+⚠️ CHANGE IMMEDIATELY!
+
+MIGRATION TIME: ~2-3 minutes
+DOWNTIME: None (additive changes only)
+
+POST-MIGRATION CHECKLIST:
+- [ ] All 3 new tables created
+- [ ] Admin user exists
+- [ ] Pricing rules inserted (5 entries)
+- [ ] Bonus config inserted
+- [ ] Indexes created
+- [ ] Test login successful
+- [ ] Password changed
+- [ ] Pricing config accessible
+- [ ] Bonus config accessible
+- [ ] Test complete booking flow
+
+================================================================================
+11. TROUBLESHOOTING
+================================================================================
+
+COMMON ISSUES & SOLUTIONS:
+--------------------------------------------------------------------------------
+
+ISSUE: Database connection failed
+SOLUTION:
+- Check POSTGRES_URL in environment variables
+- Verify Supabase database is running
+- Check SSL settings (required for Supabase)
+- Verify connection string format
+
+ISSUE: Admin login not working
+SOLUTION:
+- Verify admin_users table exists
+- Check if default user was created
+- Verify password hash matches
+- Clear browser cookies and try again
+
+ISSUE: Bonus time not calculating correctly
+SOLUTION:
+- Check bonus_config table exists
+- Verify config_data is valid JSON
+- Check if snacks are enabled (disables bonus)
+- Verify day type detection (weekday/weekend)
+
+ISSUE: Pricing not updating
+SOLUTION:
+- Check pricing_rules table exists
+- Verify game_type matches exactly
+- Check weekday/weekend detection
+- Refresh browser cache
+
+ISSUE: Buttons overflowing card
+SOLUTION:
+- Verify latest code is deployed
+- Check StationCard.jsx has flex-1 on all buttons
+- Clear browser cache
+- Hard refresh (Ctrl+Shift+R)
+
+ISSUE: Multi-device sync not working
+SOLUTION:
+- Check paid_events table exists
+- Verify polling is active (every 5 seconds)
+- Check network connectivity
+- Verify API endpoint is accessible
+
+ISSUE: Vercel deployment failed
+SOLUTION:
+- Check serverless function limit (max 12)
+- Verify build command succeeds locally
+- Check environment variables are set
+- Review Vercel deployment logs
+
+DEBUGGING TIPS:
+--------------------------------------------------------------------------------
+
+1. Check Browser Console:
+   - F12 → Console tab
+   - Look for API errors
+   - Check network requests
+
+2. Check Server Logs:
+   - Vercel → Deployments → View Function Logs
+   - Look for database errors
+   - Check SQL query errors
+
+3. Test API Endpoints:
+   - Use Postman or curl
+   - Test each endpoint individually
+   - Verify request/response format
+
+4. Database Queries:
+   - Use Supabase SQL Editor
+   - Run SELECT queries to verify data
+   - Check table structure
+
+5. Local Testing:
+   - Run npm run dev:all
+   - Test all features locally
+   - Compare with production behavior
+
+SUPPORT RESOURCES:
+--------------------------------------------------------------------------------
+- Documentation: This file
+- Migration Guide: PRODUCTION_DB_MIGRATION.txt
+- Migration Details: PROD_MIGRATION_GUIDE.txt
+- GitHub Repository: ponraj1990/Gamersspot
+- Vercel Dashboard: https://vercel.com/dashboard
+- Supabase Dashboard: https://supabase.com/dashboard
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
+
+Last Updated: 2025-01-29
+Version: 2.0
+Status: ✅ Production Ready
+Next Review: After next major feature release
+
+For questions or updates, refer to the GitHub repository or contact the
+development team.
