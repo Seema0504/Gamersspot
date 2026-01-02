@@ -233,6 +233,51 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
         }
     };
 
+    const handleDeleteShop = async (shop) => {
+        // Check if shop can be deleted (only EXPIRED or CANCELLED)
+        const canDelete = shop.plan_status === 'EXPIRED' || shop.plan_status === 'CANCELLED' || !shop.plan_status;
+
+        if (!canDelete) {
+            alert('Cannot delete shop with ACTIVE subscription. Please cancel or expire the subscription first.');
+            return;
+        }
+
+        const confirmMessage = `⚠️ WARNING: You are about to permanently delete:\n\nShop: ${shop.name}\nStatus: ${shop.plan_status || 'No Subscription'}\n\nThis will delete:\n- All shop data\n- All invoices\n- All customers\n- All stations\n- Owner account\n\nThis action CANNOT be undone!\n\nType the shop name to confirm: "${shop.name}"`;
+
+        const userInput = prompt(confirmMessage);
+
+        if (userInput !== shop.name) {
+            if (userInput !== null) {
+                alert('Shop name did not match. Deletion cancelled.');
+            }
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin?action=delete-shop', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ shopId: shop.id })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                alert(`✅ ${data.message}`);
+                fetchShops();
+            } else {
+                alert(`❌ ${data.error || 'Failed to delete shop'}`);
+            }
+        } catch (error) {
+            console.error('Error deleting shop:', error);
+            alert('An error occurred while deleting the shop.');
+        }
+    };
+
     const handleSort = (key) => {
         let direction = 'asc';
         if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -640,6 +685,16 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                                 >
                                                     🔑
                                                 </button>
+                                                {/* Delete button - only for expired/cancelled shops */}
+                                                {(shop.plan_status === 'EXPIRED' || shop.plan_status === 'CANCELLED' || !shop.plan_status) && (
+                                                    <button
+                                                        onClick={() => handleDeleteShop(shop)}
+                                                        className="text-red-600 hover:text-red-900 transition-colors"
+                                                        title="Delete Shop (Permanent)"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

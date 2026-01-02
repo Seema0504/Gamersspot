@@ -287,6 +287,61 @@ async function handler(req, res) {
             return res.status(200).json({ success: true, message: 'Credentials updated' });
         }
 
+        // DELETE /api/admin?action=delete-shop
+        // Delete shop (only if subscription is EXPIRED or CANCELLED)
+        if (req.method === 'DELETE' && action === 'delete-shop') {
+            const { shopId } = req.body;
+
+            if (!shopId) {
+                return res.status(400).json({ error: 'Shop ID is required' });
+            }
+
+            await client.query('BEGIN');
+
+            try {
+                // Check subscription status
+                const subCheck = await client.query(
+                    `SELECT status FROM subscriptions 
+                     WHERE shop_id = $1 
+                     ORDER BY created_at DESC 
+                     LIMIT 1`,
+                    [shopId]
+                );
+
+                if (subCheck.rows.length > 0) {
+                    const status = subCheck.rows[0].status;
+                    if (status === 'ACTIVE') {
+                        await client.query('ROLLBACK');
+                        return res.status(403).json({
+                            error: 'Cannot delete shop with active subscription. Please cancel or expire the subscription first.'
+                        });
+                    }
+                }
+
+                // Delete shop (CASCADE will handle related records)
+                const result = await client.query(
+                    `DELETE FROM shops WHERE id = $1 RETURNING id, name`,
+                    [shopId]
+                );
+
+                if (result.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Shop not found' });
+                }
+
+                await client.query('COMMIT');
+
+                return res.status(200).json({
+                    success: true,
+                    message: `Shop "${result.rows[0].name}" deleted successfully`,
+                    deletedShopId: result.rows[0].id
+                });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            }
+        }
+
         return res.status(404).json({ error: 'Unknown Action' });
 
     } catch (error) {
