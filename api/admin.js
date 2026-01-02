@@ -145,7 +145,7 @@ async function handler(req, res) {
             }
 
             const result = await client.query(
-                `SELECT id, name as shop_name, is_active, created_at 
+                `SELECT id, name as shop_name, address, phone, email, upi_id, is_active, created_at 
                  FROM shops 
                  WHERE id = $1`,
                 [shopId]
@@ -159,16 +159,16 @@ async function handler(req, res) {
         }
 
         // PUT /api/admin?action=update-shop
-        // Update shop details (name, address, phone, email)
+        // Update shop details (name, address, phone, email, upi_id)
         if (req.method === 'PUT' && action === 'update-shop') {
-            const { id, name, address, phone, email } = req.body;
+            const { id, name, address, phone, email, upi_id } = req.body;
 
             const result = await client.query(
                 `UPDATE shops 
-                 SET name = $1, address = $2, phone = $3, email = $4, updated_at = NOW()
-                 WHERE id = $5
+                 SET name = $1, address = $2, phone = $3, email = $4, upi_id = $5, updated_at = NOW()
+                 WHERE id = $6
                  RETURNING *`,
-                [name, address, phone, email, id]
+                [name, address, phone, email, upi_id, id]
             );
 
             if (result.rows.length === 0) {

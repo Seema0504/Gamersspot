@@ -79,7 +79,8 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
             name: shop.name,
             address: shop.address || '',
             phone: shop.phone || '',
-            email: shop.email || ''
+            email: shop.email || '',
+            upi_id: shop.upi_id || ''
         });
         setShowEditModal(true);
     };
@@ -576,6 +577,15 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                     placeholder="+1234567890"
                                     value={editingShop.phone}
                                     onChange={e => setEditingShop({ ...editingShop, phone: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">UPI ID</label>
+                                <input
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="username@upi"
+                                    value={editingShop.upi_id || ''}
+                                    onChange={e => setEditingShop({ ...editingShop, upi_id: e.target.value })}
                                 />
                             </div>
                             <div>

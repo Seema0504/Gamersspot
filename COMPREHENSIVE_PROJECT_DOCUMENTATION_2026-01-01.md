@@ -494,6 +494,137 @@ POSTGRES_URL=postgresql://postgres:[PASSWORD]@[PROD-PROJECT].pooler.supabase.com
 - **Timezone Fix**: Fixed "IST-shifted UTC" double conversion bugs. Tables now store varying true UTC, and UI converts to IST.
 - **Station Persistence**: Fixed deleted stations reappearing.
 
+### Version 2.6 - January 2, 2026 (Invoice System Overhaul & Mobile Optimization)
+
+#### 🐛 Critical Bug Fixes
+1. **Invoice Double-Saving Bug Fixed**:
+   - **Problem**: Invoices were being saved multiple times (on page refresh, modal close, and "Mark as Paid" click)
+   - **Solution**: Moved invoice saving logic from `handleGenerateInvoice` to `handleInvoicePaid`
+   - **Implementation**: Added `_saved` flag to prevent duplicate saves
+   - **Result**: Invoice now saves exactly once, only when "Mark as Paid" is clicked
+   - **Files Modified**: `src/App.jsx`
+
+2. **Database Sequence Conflict Resolved**:
+   - Fixed `duplicate key value violates unique constraint "invoices_pkey"` error
+   - Reset invoice sequence to sync with existing records
+   - Created missing shop records (IDs: 1, 9, 10, 11) to satisfy foreign key constraints
+   - **Database Commands**: 
+     ```sql
+     SELECT setval('invoices_id_seq', (SELECT MAX(id) FROM invoices));
+     INSERT INTO shops (id, name, ...) VALUES (...);
+     ```
+
+#### 📱 Mobile Optimization
+1. **Invoice Viewer Mobile Enhancements**:
+   - **"Mark as Paid" Button**:
+     - Increased button size: `minHeight: 48px`, `minWidth: 200px` (Apple's recommended touch target)
+     - Centered layout on mobile for better accessibility
+     - Enhanced padding: `py-3.5` on mobile, `py-3` on desktop
+     - Added `touch-manipulation` CSS class for better touch response
+   - **Responsive Design**:
+     - Improved spacing and gap between elements
+     - Better visual hierarchy with larger, bolder text
+     - Added `active:bg-green-800` for visual feedback when tapping
+
+2. **Header Layout Optimization**:
+   - Reorganized modal header for better mobile usability
+   - Increased outer padding: `p-2 sm:p-4`
+   - Close button moved to top-right corner (standard UX pattern)
+   - Larger touch target on mobile: `p-2.5` (40px × 40px minimum)
+
+#### ✨ Feature Enhancements
+1. **Invoice Viewer UI Improvements**:
+   - **Removed**: "Download PDF" button from normal invoice generation flow (cleaner preview experience)
+   - **Added**: Download PDF and Print icon buttons for read-only mode (Daily Revenue Report views)
+   - **Icon Design**: 
+     - Small, clean icon-only buttons (16px × 16px icons)
+     - Light backgrounds with subtle borders
+     - Download PDF: Blue icon (`bg-blue-50`, `text-blue-600`)
+     - Print: Gray icon (`bg-gray-50`, `text-gray-700`)
+   - **Button Positioning**: 
+     - Aligned in header row next to close button
+     - Order: [Download PDF] [Print] [Close]
+     - Proper spacing with `gap-1.5`
+
+2. **Invoice Generation Workflow**:
+   - **Preview Mode**: "Generate Invoice" now creates preview only (no database save)
+   - **Commit on Payment**: Invoice saved to database only when "Mark as Paid" is clicked
+   - **Safe Operations**: 
+     - Closing modal doesn't save invoice
+     - Refreshing page doesn't save invoice
+     - User can review before committing
+
+#### 🗄️ Database Updates
+1. **Local Database Schema Alignment**:
+   - Added `shop_id` column to `invoices` table for multi-tenant support
+   - Created index: `idx_invoices_shop_id` for performance
+   - Populated missing shop records to match user authentication data
+
+2. **Invoice Number Generation**:
+   - Format: `INV-{SHOP_ID}-{YYYYMMDD}-{SEQUENCE}`
+   - Example: `INV-11-20260102-0001`
+   - Backend generates unique invoice numbers (not frontend)
+   - Daily sequence counter per shop
+
+#### 📝 Code Quality Improvements
+1. **Invoice State Management**:
+   - Added `_saved` flag tracking to invoice objects
+   - Improved error handling with user-friendly alerts
+   - Better separation of concerns (preview vs. save operations)
+
+2. **Component Refactoring**:
+   - `InvoiceViewer.jsx`: Added `isGenerating` state for PDF generation
+   - `App.jsx`: Separated invoice generation and payment logic
+   - Improved code comments and documentation
+
+#### 🎨 UI/UX Enhancements
+1. **Visual Design**:
+   - More compact invoice header with better information density
+   - Improved button styling with modern hover/active states
+   - Better visual feedback for user actions
+   - Consistent spacing and alignment across all screen sizes
+
+2. **Accessibility**:
+   - Added `title` attributes for icon-only buttons (tooltips)
+   - Proper `aria-label` for close button
+   - Minimum touch targets meet WCAG guidelines (48px)
+   - Better keyboard navigation support
+
+#### 🔧 Technical Details
+**Files Modified**:
+- `src/App.jsx` - Invoice generation and payment logic
+- `src/components/InvoiceViewer.jsx` - UI enhancements and button layout
+- `api/invoices.js` - Invoice number generation (reviewed, no changes needed)
+
+**Database Migrations**:
+```sql
+-- Add shop_id to invoices table
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS shop_id INTEGER DEFAULT 1 NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_shop_id ON invoices(shop_id);
+
+-- Reset invoice sequence
+SELECT setval('invoices_id_seq', (SELECT MAX(id) FROM invoices));
+
+-- Create missing shops
+INSERT INTO shops (id, name, address, phone, email, is_active, created_at) 
+VALUES 
+  (1, 'Gamers Spot', 'Local Shop', '1234567890', 'shop@example.com', true, NOW()),
+  (9, 'Shop 1', 'Address 1', '1234567890', 'shop1@example.com', true, NOW()),
+  (10, 'Shop 2', 'Address 2', '1234567890', 'shop2@example.com', true, NOW()),
+  (11, 'Shop 3', 'Address 3', '1234567890', 'shop3@example.com', true, NOW())
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+```
+
+**Testing Performed**:
+- ✅ Invoice generation and preview
+- ✅ "Mark as Paid" functionality
+- ✅ Modal close without saving
+- ✅ Page refresh without saving
+- ✅ PDF download from Daily Revenue Report
+- ✅ Print functionality
+- ✅ Mobile responsiveness (all screen sizes)
+- ✅ Touch target accessibility
+
 ---
 
 **End of Documentation**  

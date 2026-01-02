@@ -710,3 +710,74 @@ input[type="checkbox"]:checked {
     transform: rotate(360deg);
   }
 }
+
+/* ========================================
+   PRINT STYLES - Invoice Printing
+   ======================================== */
+@media print {
+  @page {
+    margin: 1cm;
+    size: A4;
+  }
+
+  /* CRITICAL: Collapse the main application structure to remove blank pages.
+     We use display: none instead of visibility: hidden for these specific
+     large elements to ensure they don't take up any layout space. */
+  nav,
+  header,
+  footer,
+  main,
+  aside {
+    display: none !important;
+  }
+
+  /* Fallback: Hide everything else using visibility
+     This catches overlays, modals, and other UI elements */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the invoice content and its children */
+  #invoice-content,
+  #invoice-content * {
+    visibility: visible !important;
+  }
+
+  /* Position the invoice at the top-left
+     Since 'main' is hidden, the document height is collapsed,
+     so absolute positioning works perfectly without extra pages. */
+  #invoice-content {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background: white !important;
+  }
+
+  /* Ensure background is white and reset page properties */
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Clean print styling */
+  #invoice-content * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    color: black !important;
+  }
+
+  #invoice-content table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #invoice-content th,
+  #invoice-content td {
+    border: 1px solid #000 !important;
+    padding: 8px !important;
+  }
+}

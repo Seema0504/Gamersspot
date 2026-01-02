@@ -31,6 +31,7 @@ function App() {
   const [shopName, setShopName] = useState('') // Current shop name for multi-shop identification
   const [shopId, setShopId] = useState(null) // Current shop ID
   const [originalShopId, setOriginalShopId] = useState(null) // User's original shop ID (for Super Admin)
+  const [upiId, setUpiId] = useState('') // Configured UPI ID for payments
   const [availableShops, setAvailableShops] = useState([]) // List of all shops (for Super Admin)
   const [viewingShopDashboard, setViewingShopDashboard] = useState(false) // Super Admin viewing a shop's dashboard
   const [stations, setStations] = useState([])
@@ -504,6 +505,27 @@ function App() {
   }
 
   const handleInvoicePaid = async (invoiceStations, sendSMS = false) => {
+    // Save invoice to database ONLY when "Mark as Paid" is clicked
+    // This prevents duplicate saves on refresh or close
+    if (invoice && !invoice._saved) {
+      try {
+        await invoicesAPI.create({
+          stations: invoice.stations,
+          subtotal: invoice.subtotal,
+          discount: invoice.discount,
+          total: invoice.total
+        })
+
+        // Mark invoice as saved to prevent duplicate saves
+        invoice._saved = true
+      } catch (error) {
+        console.error('Failed to save invoice to database:', error)
+        alert('Failed to save invoice. Please check your connection and try again.')
+        return // Stop the reset process if saving fails
+      }
+    }
+
+
     // Reset all stations that were in the invoice to their initial state
     // This clears completed sessions and resets stations completely
 
@@ -889,21 +911,11 @@ function App() {
       discount: adjustmentAmount, // Can be negative (discount) or positive (increase)
       total: finalTotal,
       date: getIndianTimeISO(),
+      _saved: false // Track if invoice has been saved to database
     }
 
-    // Save invoice to database
-    try {
-      await invoicesAPI.create({
-        invoiceNumber,
-        stations: invoiceStations,
-        subtotal,
-        discount: adjustmentAmount, // Can be negative (discount) or positive (increase)
-        total: finalTotal,
-      })
-    } catch (error) {
-      console.error('Failed to save invoice to database:', error)
-      // Continue anyway to show the invoice
-    }
+    // Don't save to database yet - only save when "Mark as Paid" is clicked
+    // This prevents duplicate saves on refresh or close
 
     setInvoice(invoice)
   }
@@ -982,6 +994,7 @@ function App() {
               if (!response.user.shopId && shops.length > 0) {
                 setShopId(shops[0].id)
                 setShopName(shops[0].name)
+                setUpiId(shops[0].upi_id || '')
               }
             } catch (error) {
               console.error('Error fetching shops:', error)
@@ -999,6 +1012,7 @@ function App() {
               const shopData = await shopResponse.json()
               if (shopData.shop) {
                 setShopName(shopData.shop.shop_name || `Shop #${response.user.shopId}`)
+                setUpiId(shopData.shop.upi_id || '')
               }
             } catch (error) {
               console.error('Error fetching shop name:', error)
@@ -1057,6 +1071,7 @@ function App() {
         const shopData = await shopResponse.json()
         if (shopData.shop) {
           setShopName(shopData.shop.shop_name || `Shop #${data.user.shopId}`)
+          setUpiId(shopData.shop.upi_id || '')
         }
       } catch (error) {
         console.error('Error fetching shop name:', error)
@@ -1095,6 +1110,7 @@ function App() {
     // Update shop info
     setShopId(selectedShop.id)
     setShopName(selectedShop.name)
+    setUpiId(selectedShop.upi_id || '')
 
     // Reset all UI state to default (like fresh login)
     setShowPricingConfig(false)
@@ -1189,6 +1205,7 @@ function App() {
 
     setShopId(shop.id)
     setShopName(shop.name)
+    setUpiId(shop.upi_id || '')
     setViewingShopDashboard(true)
 
     // Load shop data
@@ -1234,7 +1251,9 @@ function App() {
 
     setViewingShopDashboard(false)
     setShopId(originalShopId)
+    setShopId(originalShopId)
     setShopName('')
+    setUpiId('')
     setStations([])
   }
 
@@ -1784,6 +1803,7 @@ function App() {
           onPaid={handleInvoicePaid}
           snacksList={snacksList}
           shopName={shopName || 'Gamers Spot'}
+          upiId={upiId}
         />
       )}
 

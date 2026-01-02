@@ -55,6 +55,8 @@ database/migrate_*.sql
 database/recreate_*.sql
 database/insert_*.sql
 database/supabase_complete_reset.sql
-# Keep production migration file - needed for deployment
-!database/supabase_production_migration.sql
 database/add_customer_phone_migration.sql
+
+# But KEEP migration files (important for deployment)
+!database/supabase_production_migration*.sql
+!database/supabase_test_migration*.sql

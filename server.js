@@ -25,7 +25,7 @@ app.use(express.json());
 
 // Import API handlers
 import stationsHandler from './api/stations.js';
-import transferHandler from './api/stations/transfer.js';
+
 import invoicesHandler from './api/invoices.js';
 import reportsHandler from './api/reports.js';
 import paidEventsHandler from './api/paid-events.js';
@@ -102,7 +102,7 @@ const adaptHandler = (handler) => {
 };
 
 // API Routes
-app.post('/api/stations/transfer', adaptHandler(transferHandler));
+
 app.all('/api/stations', adaptHandler(stationsHandler));
 app.all('/api/stations/:id', adaptHandler(stationsHandler));
 app.all('/api/invoices', adaptHandler(invoicesHandler));
@@ -127,7 +127,7 @@ app.get('/health', (req, res) => {
 // Database connection test endpoint
 app.get('/test-db', async (req, res) => {
   try {
-    const { getDbClient, closeDbClient } = await import('./api/db.js');
+    const { getDbClient, closeDbClient } = await import('./api/_lib/db.js');
     const db = await getDbClient();
     const client = db.client;
 
