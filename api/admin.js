@@ -318,23 +318,56 @@ async function handler(req, res) {
                     }
                 }
 
-                // Delete shop (CASCADE will handle related records)
-                const result = await client.query(
-                    `DELETE FROM shops WHERE id = $1 RETURNING id, name`,
+                // Get shop name before deletion
+                const shopResult = await client.query(
+                    `SELECT name FROM shops WHERE id = $1`,
                     [shopId]
                 );
 
-                if (result.rows.length === 0) {
+                if (shopResult.rows.length === 0) {
                     await client.query('ROLLBACK');
                     return res.status(404).json({ error: 'Shop not found' });
                 }
+
+                const shopName = shopResult.rows[0].name;
+
+                // Manually delete all related records in correct order
+                // 1. Delete paid_events
+                await client.query(`DELETE FROM paid_events WHERE shop_id = $1`, [shopId]);
+
+                // 2. Delete invoices
+                await client.query(`DELETE FROM invoices WHERE shop_id = $1`, [shopId]);
+
+                // 3. Delete customers
+                await client.query(`DELETE FROM customers WHERE shop_id = $1`, [shopId]);
+
+                // 4. Delete stations
+                await client.query(`DELETE FROM stations WHERE shop_id = $1`, [shopId]);
+
+                // 5. Delete snacks
+                await client.query(`DELETE FROM snacks WHERE shop_id = $1`, [shopId]);
+
+                // 6. Delete pricing_rules
+                await client.query(`DELETE FROM pricing_rules WHERE shop_id = $1`, [shopId]);
+
+                // 7. Delete bonus_config
+                await client.query(`DELETE FROM bonus_config WHERE shop_id = $1`, [shopId]);
+
+                // 8. Delete subscriptions
+                await client.query(`DELETE FROM subscriptions WHERE shop_id = $1`, [shopId]);
+
+                // 9. Delete admin_users (including shop owner)
+                await client.query(`DELETE FROM admin_users WHERE shop_id = $1`, [shopId]);
+
+                // 10. Finally, delete the shop itself
+                await client.query(`DELETE FROM shops WHERE id = $1`, [shopId]);
 
                 await client.query('COMMIT');
 
                 return res.status(200).json({
                     success: true,
-                    message: `Shop "${result.rows[0].name}" deleted successfully`,
-                    deletedShopId: result.rows[0].id
+                    message: `Shop "${shopName}" and all related data deleted successfully`,
+                    deletedShopId: shopId
                 });
             } catch (err) {
                 await client.query('ROLLBACK');
