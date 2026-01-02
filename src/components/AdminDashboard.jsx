@@ -27,15 +27,18 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [credentialsData, setCredentialsData] = useState({ shopId: null, username: '', password: '' });
     const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
+    const [showDeleted, setShowDeleted] = useState(false);
+
 
     useEffect(() => {
         fetchShops();
-    }, []);
+    }, [showDeleted]);
 
     const fetchShops = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('/api/admin?action=shops', {
+            const url = `/api/admin?action=shops${showDeleted ? '&includeDeleted=true' : ''}`;
+            const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
@@ -275,6 +278,38 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
         } catch (error) {
             console.error('Error deleting shop:', error);
             alert('An error occurred while deleting the shop.');
+        }
+    };
+
+    const handleRestoreShop = async (shop) => {
+        const confirmMessage = `Are you sure you want to restore "${shop.name}"?\n\nThis will:\n- Reactivate the shop\n- Restore owner account access\n- Make the shop visible again`;
+
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin?action=restore-shop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ shopId: shop.id })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                alert(`✅ ${data.message}`);
+                fetchShops();
+            } else {
+                alert(`❌ ${data.error || 'Failed to restore shop'}`);
+            }
+        } catch (error) {
+            console.error('Error restoring shop:', error);
+            alert('An error occurred while restoring the shop.');
         }
     };
 
@@ -559,8 +594,19 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
 
                 {/* Shops Table */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-200">
-                        <h2 className="text-lg font-semibold text-gray-900">All Shops ({shops.length})</h2>
+                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                        <h2 className="text-lg font-semibold text-gray-900">
+                            All Shops ({shops.length})
+                        </h2>
+                        <button
+                            onClick={() => setShowDeleted(!showDeleted)}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${showDeleted
+                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                        >
+                            {showDeleted ? '👁️ Showing Deleted' : '👁️‍🗨️ Show Deleted'}
+                        </button>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full">
@@ -602,14 +648,21 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                         </td>
                                     </tr>
                                 ) : sortedShops.map(shop => (
-                                    <tr key={shop.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={shop.id} className={`transition-colors ${shop.deleted_at ? 'bg-gray-100 opacity-75' : 'hover:bg-gray-50'}`}>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                                <div className={`flex-shrink-0 h-10 w-10 rounded-lg flex items-center justify-center ${shop.deleted_at ? 'bg-gray-400' : 'bg-gradient-to-br from-blue-500 to-purple-600'}`}>
                                                     <span className="text-white font-bold text-sm">{shop.name.charAt(0).toUpperCase()}</span>
                                                 </div>
                                                 <div className="ml-4">
-                                                    <div className="text-sm font-medium text-gray-900">{shop.name}</div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-sm font-medium text-gray-900">{shop.name}</div>
+                                                        {shop.deleted_at && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                                                🗑️ DELETED
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <div className="text-xs text-gray-500">ID: #{shop.id}</div>
                                                 </div>
                                             </div>
@@ -657,43 +710,57 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleManageShop(shop)}
-                                                    className="text-blue-600 hover:text-blue-900 transition-colors"
-                                                    title="Manage Dashboard"
-                                                >
-                                                    📊
-                                                </button>
-                                                <button
-                                                    onClick={() => handleEditShop(shop)}
-                                                    className="text-yellow-600 hover:text-yellow-900 transition-colors"
-                                                    title="Edit Details"
-                                                >
-                                                    ✏️
-                                                </button>
-                                                <button
-                                                    onClick={() => handleManageSubscription(shop)}
-                                                    className="text-purple-600 hover:text-purple-900 transition-colors"
-                                                    title="Manage Subscription"
-                                                >
-                                                    💳
-                                                </button>
-                                                <button
-                                                    onClick={() => handleEditCredentials(shop)}
-                                                    className="text-gray-600 hover:text-gray-900 transition-colors"
-                                                    title="Manage Credentials"
-                                                >
-                                                    🔑
-                                                </button>
-                                                {/* Delete button - only for expired/cancelled shops */}
-                                                {(shop.plan_status === 'EXPIRED' || shop.plan_status === 'CANCELLED' || !shop.plan_status) && (
+                                                {shop.deleted_at ? (
+                                                    // Restore button for deleted shops
                                                     <button
-                                                        onClick={() => handleDeleteShop(shop)}
-                                                        className="text-red-600 hover:text-red-900 transition-colors"
-                                                        title="Delete Shop (Permanent)"
+                                                        onClick={() => handleRestoreShop(shop)}
+                                                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors text-sm font-medium"
+                                                        title="Restore Shop"
                                                     >
-                                                        🗑️
+                                                        ♻️ Restore
                                                     </button>
+                                                ) : (
+                                                    // Normal action buttons for active shops
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleManageShop(shop)}
+                                                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                                                            title="Manage Dashboard"
+                                                        >
+                                                            📊
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleEditShop(shop)}
+                                                            className="text-yellow-600 hover:text-yellow-900 transition-colors"
+                                                            title="Edit Details"
+                                                        >
+                                                            ✏️
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleManageSubscription(shop)}
+                                                            className="text-purple-600 hover:text-purple-900 transition-colors"
+                                                            title="Manage Subscription"
+                                                        >
+                                                            💳
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleEditCredentials(shop)}
+                                                            className="text-gray-600 hover:text-gray-900 transition-colors"
+                                                            title="Manage Credentials"
+                                                        >
+                                                            🔑
+                                                        </button>
+                                                        {/* Delete button - only for expired/cancelled shops */}
+                                                        {(shop.plan_status === 'EXPIRED' || shop.plan_status === 'CANCELLED' || !shop.plan_status) && (
+                                                            <button
+                                                                onClick={() => handleDeleteShop(shop)}
+                                                                className="text-red-600 hover:text-red-900 transition-colors"
+                                                                title="Delete Shop (Soft Delete)"
+                                                            >
+                                                                🗑️
+                                                            </button>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         </td>

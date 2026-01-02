@@ -59,8 +59,12 @@ async function handler(req, res) {
             return res.status(200).json({ token });
         }
 
-        // GET /api/admin?action=shops
+        // GET /api/admin?action=shops&includeDeleted=true
         if (req.method === 'GET' && action === 'shops') {
+            const includeDeleted = req.query.includeDeleted === 'true';
+
+            const deletedFilter = includeDeleted ? '' : 'WHERE s.deleted_at IS NULL';
+
             const result = await client.query(`
                 SELECT s.*, 
                        (SELECT status FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_status,
@@ -69,8 +73,8 @@ async function handler(req, res) {
                        (SELECT username FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' AND u.deleted_at IS NULL LIMIT 1) as owner_username,
                        (SELECT id FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' AND u.deleted_at IS NULL LIMIT 1) as owner_id
                 FROM shops s 
-                WHERE s.deleted_at IS NULL
-                ORDER BY s.created_at DESC
+                ${deletedFilter}
+                ORDER BY s.deleted_at NULLS FIRST, s.created_at DESC
             `);
             return res.status(200).json(result.rows);
         }
@@ -356,6 +360,61 @@ async function handler(req, res) {
                     message: `Shop "${shopName}" has been archived (soft deleted)`,
                     deletedShopId: shopId,
                     note: 'Data preserved for audit trail. Contact support to restore.'
+                });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            }
+        }
+
+        // POST /api/admin?action=restore-shop
+        // Restore a soft-deleted shop
+        if (req.method === 'POST' && action === 'restore-shop') {
+            const { shopId } = req.body;
+
+            if (!shopId) {
+                return res.status(400).json({ error: 'Shop ID is required' });
+            }
+
+            await client.query('BEGIN');
+
+            try {
+                // Check if shop exists and is deleted
+                const shopResult = await client.query(
+                    `SELECT name, deleted_at FROM shops WHERE id = $1`,
+                    [shopId]
+                );
+
+                if (shopResult.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Shop not found' });
+                }
+
+                if (!shopResult.rows[0].deleted_at) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Shop is not deleted' });
+                }
+
+                const shopName = shopResult.rows[0].name;
+
+                // Restore the shop
+                await client.query(
+                    `UPDATE shops SET deleted_at = NULL WHERE id = $1`,
+                    [shopId]
+                );
+
+                // Restore associated admin users
+                await client.query(
+                    `UPDATE admin_users SET deleted_at = NULL WHERE shop_id = $1`,
+                    [shopId]
+                );
+
+                await client.query('COMMIT');
+
+                return res.status(200).json({
+                    success: true,
+                    message: `Shop "${shopName}" has been restored successfully`,
+                    restoredShopId: shopId
                 });
             } catch (err) {
                 await client.query('ROLLBACK');
