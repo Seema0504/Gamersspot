@@ -66,9 +66,10 @@ async function handler(req, res) {
                        (SELECT status FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_status,
                        (SELECT plan_name FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_name,
                        (SELECT end_date FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_end_date,
-                       (SELECT username FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' LIMIT 1) as owner_username,
-                       (SELECT id FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' LIMIT 1) as owner_id
+                       (SELECT username FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' AND u.deleted_at IS NULL LIMIT 1) as owner_username,
+                       (SELECT id FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' AND u.deleted_at IS NULL LIMIT 1) as owner_id
                 FROM shops s 
+                WHERE s.deleted_at IS NULL
                 ORDER BY s.created_at DESC
             `);
             return res.status(200).json(result.rows);
@@ -283,12 +284,11 @@ async function handler(req, res) {
                     [hash, shopId]
                 );
             }
-
             return res.status(200).json({ success: true, message: 'Credentials updated' });
         }
 
         // DELETE /api/admin?action=delete-shop
-        // Delete shop (only if subscription is EXPIRED or CANCELLED)
+        // Soft delete shop (only if subscription is EXPIRED or CANCELLED)
         if (req.method === 'DELETE' && action === 'delete-shop') {
             const { shopId } = req.body;
 
@@ -318,9 +318,9 @@ async function handler(req, res) {
                     }
                 }
 
-                // Get shop name before deletion
+                // Get shop name before soft deletion
                 const shopResult = await client.query(
-                    `SELECT name FROM shops WHERE id = $1`,
+                    `SELECT name, deleted_at FROM shops WHERE id = $1`,
                     [shopId]
                 );
 
@@ -329,45 +329,33 @@ async function handler(req, res) {
                     return res.status(404).json({ error: 'Shop not found' });
                 }
 
+                if (shopResult.rows[0].deleted_at) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Shop is already deleted' });
+                }
+
                 const shopName = shopResult.rows[0].name;
 
-                // Manually delete all related records in correct order
-                // 1. Delete paid_events
-                await client.query(`DELETE FROM paid_events WHERE shop_id = $1`, [shopId]);
+                // SOFT DELETE: Set deleted_at timestamp instead of removing records
+                // 1. Soft delete the shop
+                await client.query(
+                    `UPDATE shops SET deleted_at = NOW() WHERE id = $1`,
+                    [shopId]
+                );
 
-                // 2. Delete invoices
-                await client.query(`DELETE FROM invoices WHERE shop_id = $1`, [shopId]);
-
-                // 3. Delete customers
-                await client.query(`DELETE FROM customers WHERE shop_id = $1`, [shopId]);
-
-                // 4. Delete stations
-                await client.query(`DELETE FROM stations WHERE shop_id = $1`, [shopId]);
-
-                // 5. Delete snacks
-                await client.query(`DELETE FROM snacks WHERE shop_id = $1`, [shopId]);
-
-                // 6. Delete pricing_rules
-                await client.query(`DELETE FROM pricing_rules WHERE shop_id = $1`, [shopId]);
-
-                // 7. Delete bonus_config
-                await client.query(`DELETE FROM bonus_config WHERE shop_id = $1`, [shopId]);
-
-                // 8. Delete subscriptions
-                await client.query(`DELETE FROM subscriptions WHERE shop_id = $1`, [shopId]);
-
-                // 9. Delete admin_users (including shop owner)
-                await client.query(`DELETE FROM admin_users WHERE shop_id = $1`, [shopId]);
-
-                // 10. Finally, delete the shop itself
-                await client.query(`DELETE FROM shops WHERE id = $1`, [shopId]);
+                // 2. Soft delete associated admin users
+                await client.query(
+                    `UPDATE admin_users SET deleted_at = NOW() WHERE shop_id = $1 AND deleted_at IS NULL`,
+                    [shopId]
+                );
 
                 await client.query('COMMIT');
 
                 return res.status(200).json({
                     success: true,
-                    message: `Shop "${shopName}" and all related data deleted successfully`,
-                    deletedShopId: shopId
+                    message: `Shop "${shopName}" has been archived (soft deleted)`,
+                    deletedShopId: shopId,
+                    note: 'Data preserved for audit trail. Contact support to restore.'
                 });
             } catch (err) {
                 await client.query('ROLLBACK');
