@@ -83,6 +83,12 @@ async function handler(req, res) {
                 return res.status(400).json({ error: 'Shop name, phone, email, and address are required' });
             }
 
+            // Validate phone number format (Indian mobile: 10 digits starting with 6-9)
+            const phoneRegex = /^[6-9]\d{9}$/;
+            if (!phoneRegex.test(phone)) {
+                return res.status(400).json({ error: 'Invalid phone number. Must be a 10-digit Indian mobile number starting with 6, 7, 8, or 9' });
+            }
+
             // Ensure days is treated as integer; default 14 if undefined
             // If explicitly 0, it means Premium Monthly
             const daysInput = (trialDays !== undefined && trialDays !== null) ? parseInt(trialDays) : 14;

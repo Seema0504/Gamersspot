@@ -51,6 +51,14 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
 
     const handleCreateShop = async (e) => {
         e.preventDefault();
+
+        // Frontend validation for phone number
+        const phoneRegex = /^[6-9]\d{9}$/;
+        if (!phoneRegex.test(newShop.phone)) {
+            alert('Invalid phone number! Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+            return;
+        }
+
         const token = localStorage.getItem('token');
         try {
             const res = await fetch('/api/admin?action=create-shop', {
@@ -387,12 +395,22 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                 <input
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     type="tel"
-                                    placeholder="10-digit mobile number"
+                                    placeholder="10-digit mobile (e.g., 9876543210)"
                                     value={newShop.phone}
-                                    onChange={e => setNewShop({ ...newShop, phone: e.target.value })}
-                                    pattern="[0-9]{10}"
+                                    onChange={e => {
+                                        const value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+                                        if (value.length <= 10) {
+                                            setNewShop({ ...newShop, phone: value });
+                                        }
+                                    }}
+                                    pattern="[6-9][0-9]{9}"
+                                    title="Enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9"
+                                    maxLength="10"
                                     required
                                 />
+                                {newShop.phone && !/^[6-9]\d{9}$/.test(newShop.phone) && (
+                                    <p className="text-xs text-red-600 mt-1">Must be 10 digits, starting with 6-9</p>
+                                )}
                             </div>
 
                             {/* Email */}
