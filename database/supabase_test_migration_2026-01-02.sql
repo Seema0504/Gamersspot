@@ -46,6 +46,13 @@ ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   updated_at = NOW();
 
+-- 4b. Create default subscriptions for test shops
+INSERT INTO subscriptions (shop_id, plan_name, monthly_amount, status, start_date, end_date)
+SELECT id, 'TRIAL', 0, 'ACTIVE', NOW(), NOW() + INTERVAL '30 days'
+FROM shops
+WHERE id IN (1, 9, 10, 11)
+AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE shop_id = shops.id AND status = 'ACTIVE');
+
 -- ============================================================================
 -- 5. Verify the migration
 -- ============================================================================

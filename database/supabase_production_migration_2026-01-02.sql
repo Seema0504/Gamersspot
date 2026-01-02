@@ -51,6 +51,13 @@ ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   updated_at = NOW();
 
+-- 4b. Create default subscription for Main Shop
+INSERT INTO subscriptions (shop_id, plan_name, monthly_amount, status, start_date, end_date)
+SELECT id, 'PREMIUM', 0, 'ACTIVE', NOW(), NOW() + INTERVAL '1 year'
+FROM shops
+WHERE id = 1
+AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE shop_id = 1 AND status = 'ACTIVE');
+
 -- ============================================================================
 -- 5. Link existing admin users to shops (if needed)
 -- ============================================================================

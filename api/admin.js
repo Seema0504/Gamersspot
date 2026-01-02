@@ -76,7 +76,13 @@ async function handler(req, res) {
 
         // POST /api/admin?action=create-shop
         if (req.method === 'POST' && action === 'create-shop') {
-            const { name, ownerUsername, ownerPassword, trialDays } = req.body;
+            const { name, phone, email, address, upiId, ownerUsername, ownerPassword, trialDays } = req.body;
+
+            // Validate required fields
+            if (!name || !phone || !email || !address) {
+                return res.status(400).json({ error: 'Shop name, phone, email, and address are required' });
+            }
+
             // Ensure days is treated as integer; default 14 if undefined
             // If explicitly 0, it means Premium Monthly
             const daysInput = (trialDays !== undefined && trialDays !== null) ? parseInt(trialDays) : 14;
@@ -94,10 +100,12 @@ async function handler(req, res) {
 
             await client.query('BEGIN');
 
-            // 1. Create Shop
+            // 1. Create Shop with all details
             const shopRes = await client.query(
-                `INSERT INTO shops (name, is_active) VALUES ($1, true) RETURNING id`,
-                [name]
+                `INSERT INTO shops (name, phone, email, address, upi_id, is_active) 
+                 VALUES ($1, $2, $3, $4, $5, true) 
+                 RETURNING id`,
+                [name, phone, email, address, upiId || null]
             );
             const shopId = shopRes.rows[0].id; // Serial ID
 

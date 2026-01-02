@@ -4,7 +4,16 @@ import React, { useState, useEffect } from 'react';
 const AdminDashboard = ({ onLogout, onManageShop }) => {
     const [shops, setShops] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [newShop, setNewShop] = useState({ name: '', ownerUsername: '', ownerPassword: '', trialDays: 14 });
+    const [newShop, setNewShop] = useState({
+        name: '',
+        ownerUsername: '',
+        ownerPassword: '',
+        phone: '',
+        email: '',
+        address: '',
+        upiId: '',
+        trialDays: 14
+    });
     const [editingShop, setEditingShop] = useState(null); // Shop being edited
     const [showEditModal, setShowEditModal] = useState(false);
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -57,7 +66,7 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
             if (res.ok) {
                 alert('Shop Created!');
                 fetchShops();
-                setNewShop({ name: '', ownerUsername: '', ownerPassword: '', trialDays: 14 });
+                setNewShop({ name: '', ownerUsername: '', ownerPassword: '', phone: '', email: '', address: '', upiId: '', trialDays: 14 });
             } else {
                 alert(data.error || 'Failed to create shop');
             }
@@ -358,51 +367,130 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                 {/* Create Shop Section */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">🚀 Launch New Shop</h2>
-                    <form onSubmit={handleCreateShop} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <input
-                            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Shop Name"
-                            value={newShop.name}
-                            onChange={e => setNewShop({ ...newShop, name: e.target.value })}
-                            required
-                        />
-                        <input
-                            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Owner Username"
-                            value={newShop.ownerUsername}
-                            onChange={e => setNewShop({ ...newShop, ownerUsername: e.target.value })}
-                            required
-                        />
-                        <input
-                            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            type="password"
-                            placeholder="Owner Password"
-                            value={newShop.ownerPassword}
-                            onChange={e => setNewShop({ ...newShop, ownerPassword: e.target.value })}
-                            required
-                        />
-                        <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white">
-                            <button
-                                type="button"
-                                className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border-r border-gray-300 text-gray-600 font-bold transition-colors"
-                                onClick={() => setNewShop({ ...newShop, trialDays: Math.max(0, newShop.trialDays - 1) })}
-                            >
-                                -
-                            </button>
-                            <div className="flex-1 text-center text-sm font-medium text-gray-700 min-w-[100px] px-2">
-                                {newShop.trialDays === 0 ? 'Premium (30 Days)' : `${newShop.trialDays} Days Trial`}
+                    <form onSubmit={handleCreateShop} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {/* Shop Name */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Shop Name *</label>
+                                <input
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Enter shop name"
+                                    value={newShop.name}
+                                    onChange={e => setNewShop({ ...newShop, name: e.target.value })}
+                                    required
+                                />
                             </div>
-                            <button
-                                type="button"
-                                className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border-l border-gray-300 text-gray-600 font-bold transition-colors"
-                                onClick={() => setNewShop({ ...newShop, trialDays: newShop.trialDays + 1 })}
-                            >
-                                +
-                            </button>
+
+                            {/* Phone Number */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                                <input
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    type="tel"
+                                    placeholder="10-digit mobile number"
+                                    value={newShop.phone}
+                                    onChange={e => setNewShop({ ...newShop, phone: e.target.value })}
+                                    pattern="[0-9]{10}"
+                                    required
+                                />
+                            </div>
+
+                            {/* Email */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email ID *</label>
+                                <input
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    type="email"
+                                    placeholder="shop@example.com"
+                                    value={newShop.email}
+                                    onChange={e => setNewShop({ ...newShop, email: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            {/* Address */}
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Shop Address *</label>
+                                <input
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Complete shop address"
+                                    value={newShop.address}
+                                    onChange={e => setNewShop({ ...newShop, address: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            {/* UPI ID */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">UPI ID (Optional)</label>
+                                <input
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="username@bank"
+                                    value={newShop.upiId}
+                                    onChange={e => setNewShop({ ...newShop, upiId: e.target.value })}
+                                />
+                            </div>
                         </div>
-                        <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm col-span-1 md:col-span-4 lg:col-span-1">
-                            Create Shop
-                        </button>
+
+                        <div className="border-t border-gray-200 pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {/* Owner Username */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Owner Username *</label>
+                                    <input
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="username"
+                                        value={newShop.ownerUsername}
+                                        onChange={e => setNewShop({ ...newShop, ownerUsername: e.target.value })}
+                                        required
+                                    />
+                                </div>
+
+                                {/* Owner Password */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Owner Password *</label>
+                                    <input
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        type="password"
+                                        placeholder="Secure password"
+                                        value={newShop.ownerPassword}
+                                        onChange={e => setNewShop({ ...newShop, ownerPassword: e.target.value })}
+                                        required
+                                    />
+                                </div>
+
+                                {/* Trial Days */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Plan</label>
+                                    <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white">
+                                        <button
+                                            type="button"
+                                            className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border-r border-gray-300 text-gray-600 font-bold transition-colors"
+                                            onClick={() => setNewShop({ ...newShop, trialDays: Math.max(0, newShop.trialDays - 1) })}
+                                        >
+                                            -
+                                        </button>
+                                        <div className="flex-1 text-center text-sm font-medium text-gray-700 min-w-[100px] px-2">
+                                            {newShop.trialDays === 0 ? 'Premium (30 Days)' : `${newShop.trialDays} Days Trial`}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border-l border-gray-300 text-gray-600 font-bold transition-colors"
+                                            onClick={() => setNewShop({ ...newShop, trialDays: newShop.trialDays + 1 })}
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Submit Button */}
+                                <div className="flex items-end">
+                                    <button type="submit" className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm">
+                                        Create Shop
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </form>
                 </div>
 
