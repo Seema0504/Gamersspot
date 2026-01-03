@@ -127,8 +127,14 @@ async function handler(req, res) {
                 [shopId, planId]
             );
 
-            // 3. Log Payment (Optional: Insert into a payments table)
-            // await db.client.query('INSERT INTO payments ...');
+            const newSub = result.rows[0];
+
+            // 3. Log Payment
+            await db.client.query(
+                `INSERT INTO payments (shop_id, subscription_id, amount, payment_method, transaction_id, status)
+                  VALUES ($1, $2, 999, $3, $4, 'COMPLETED')`,
+                [shopId, newSub.id, paymentDetails?.method || 'ONLINE', paymentDetails?.transactionId || 'TXN_' + Date.now()]
+            );
 
             await db.client.query('COMMIT');
 

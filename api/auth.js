@@ -50,11 +50,15 @@ export default async function handler(req, res) {
         try {
             db = await getDbClient();
 
-            // Fetch user with role and shop_id
+            // Fetch user with role and shop_id, ensuring user and linked shop are valid
             const result = await db.client.query(
-                `SELECT id, username, password_hash, role, shop_id 
-                 FROM admin_users 
-                 WHERE username = $1 AND is_active = true`,
+                `SELECT u.id, u.username, u.password_hash, u.role, u.shop_id 
+                 FROM admin_users u
+                 LEFT JOIN shops s ON u.shop_id = s.id
+                 WHERE u.username = $1 
+                 AND u.is_active = true
+                 AND u.deleted_at IS NULL
+                 AND (u.shop_id IS NULL OR (s.deleted_at IS NULL AND s.is_active = true))`,
                 [username]
             );
 

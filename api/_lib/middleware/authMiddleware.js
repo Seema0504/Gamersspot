@@ -56,8 +56,9 @@ export const authorizeRoles = (...allowedRoles) => {
 };
 
 /**
- * Middleware: Ensure Active Subscription
- * Checks cache or DB for updated status
+ * Middleware: Ensure Active Subscription (NEW AUTONOMOUS SYSTEM)
+ * Uses lazy evaluation - status is computed and updated on-demand
+ * No cron jobs required - fully autonomous
  */
 export const requireActiveSubscription = async (req, res, next) => {
     // Super Admins bypass subscription checks entirely
@@ -74,45 +75,44 @@ export const requireActiveSubscription = async (req, res, next) => {
         return res.status(400).json({ error: 'Shop Context Missing' });
     }
 
-    // TODO: Implement Caching (Redis/Memory) to avoid DB hit every request
-    // For now, we query. 
-    const db = await getDbClient();
     try {
-        const result = await db.client.query(
-            `SELECT status, end_date FROM subscriptions WHERE shop_id = $1 ORDER BY created_at DESC LIMIT 1`,
-            [shopId]
-        );
+        // Import subscription service dynamically to avoid circular dependencies
+        const { getShopSubscription } = await import('../subscriptionService.js');
 
-        if (result.rows.length === 0) {
-            return res.status(403).json({ error: 'No subscription found for this shop' });
-        }
+        // Get subscription with automatic status update (lazy evaluation)
+        const subscription = await getShopSubscription(shopId);
 
-        const sub = result.rows[0];
+        // Attach subscription to request for use in handlers
+        req.subscription = subscription;
 
-        // Strict Status Check
-        if (sub.status !== 'ACTIVE' && sub.status !== 'GRACE_PERIOD') {
+        // Check if subscription is valid
+        // Valid statuses: 'trial', 'active', 'grace'
+        // Invalid status: 'expired'
+        if (!subscription.is_valid) {
+            const daysExpired = Math.abs(subscription.days_remaining);
+
             return res.status(402).json({
                 error: 'Subscription Expired',
                 code: 'SUBSCRIPTION_EXPIRED',
-                message: 'Your subscription is ' + sub.status.toLowerCase() + '. Please make a payment to continue the service.'
+                status: subscription.computed_status,
+                message: subscription.computed_status === 'grace'
+                    ? `Your subscription is in grace period. Please renew within ${Math.ceil((new Date(subscription.grace_ends_at) - new Date()) / (1000 * 60 * 60 * 24))} days.`
+                    : `Your subscription expired ${daysExpired} days ago. Please renew to continue using the service.`,
+                plan: subscription.plan?.plan_name,
+                expires_at: subscription.expires_at,
+                grace_ends_at: subscription.grace_ends_at
             });
         }
 
-        // Date Expiry Check (for ACTIVE subscriptions that passed their date)
-        if (sub.end_date && new Date(sub.end_date) < new Date()) {
-            return res.status(402).json({
-                error: 'Subscription Expired',
-                code: 'SUBSCRIPTION_EXPIRED',
-                message: 'Your subsciption plan has expired. Please renew to continue.'
-            });
-        }
-
+        // Subscription is valid - proceed
         next();
+
     } catch (err) {
         console.error('Subscription Check Error:', err);
-        res.status(500).json({ error: 'Failed to verify subscription' });
-    } finally {
-        db.release();
+        res.status(500).json({
+            error: 'Failed to verify subscription',
+            details: err.message
+        });
     }
 };
 

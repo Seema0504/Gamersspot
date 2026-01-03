@@ -35,7 +35,7 @@ import smsHandler from './api/sms.js';
 import settingsHandler from './api/settings.js';
 import authHandler from './api/auth.js';
 import adminHandler from './api/admin.js';
-import subscriptionHandler from './api/subscription.js';
+import subscriptionsHandler from './api/subscriptions.js';
 
 // Convert Vercel-style handlers to Express middleware
 const adaptHandler = (handler) => {
@@ -117,7 +117,7 @@ app.all('/api/sms/send', adaptHandler(smsHandler));
 app.all('/api/settings', adaptHandler(settingsHandler));
 app.all('/api/auth', adaptHandler(authHandler));
 app.all('/api/admin', adaptHandler(adminHandler));
-app.all('/api/subscription', adaptHandler(subscriptionHandler));
+app.all('/api/subscriptions', adaptHandler(subscriptionsHandler));
 
 // Health check
 app.get('/health', (req, res) => {

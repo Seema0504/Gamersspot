@@ -36,7 +36,7 @@ dist-ssr
 # Database Migration and Setup Files (Exclude from Git)
 # ============================================================================
 # Exclude all .sql files except core schema
-*.sql
+
 
 # But KEEP these essential database files
 !database/schema.sql
@@ -60,3 +60,5 @@ database/add_customer_phone_migration.sql
 # But KEEP migration files (important for deployment)
 !database/supabase_production_migration*.sql
 !database/supabase_test_migration*.sql
+!database/database_complete_queries*.sql
+

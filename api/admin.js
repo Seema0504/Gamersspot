@@ -63,18 +63,30 @@ async function handler(req, res) {
         if (req.method === 'GET' && action === 'shops') {
             const includeDeleted = req.query.includeDeleted === 'true';
 
-            const deletedFilter = includeDeleted ? '' : 'WHERE s.deleted_at IS NULL';
+            // Check if deleted_at column exists (backward compatibility)
+            const columnCheck = await client.query(`
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'shops' AND column_name = 'deleted_at'
+                )
+            `);
+            const hasDeletedAtColumn = columnCheck.rows[0].exists;
+
+            // Only filter by deleted_at if column exists
+            const deletedFilter = hasDeletedAtColumn && !includeDeleted ? 'WHERE s.deleted_at IS NULL' : '';
+            const deletedAtCheck = hasDeletedAtColumn ? 'AND u.deleted_at IS NULL' : '';
+            const orderBy = hasDeletedAtColumn ? 'ORDER BY s.deleted_at NULLS FIRST, s.created_at DESC' : 'ORDER BY s.created_at DESC';
 
             const result = await client.query(`
                 SELECT s.*, 
                        (SELECT status FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_status,
                        (SELECT plan_name FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_name,
                        (SELECT end_date FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_end_date,
-                       (SELECT username FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' AND u.deleted_at IS NULL LIMIT 1) as owner_username,
-                       (SELECT id FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' AND u.deleted_at IS NULL LIMIT 1) as owner_id
+                       (SELECT username FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' ${deletedAtCheck} LIMIT 1) as owner_username,
+                       (SELECT id FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' ${deletedAtCheck} LIMIT 1) as owner_id
                 FROM shops s 
                 ${deletedFilter}
-                ORDER BY s.deleted_at NULLS FIRST, s.created_at DESC
+                ${orderBy}
             `);
             return res.status(200).json(result.rows);
         }
@@ -198,9 +210,9 @@ async function handler(req, res) {
         }
 
         // POST /api/admin?action=update-subscription
-        // Create or update subscription for a shop
+        // Create or update subscription for a shop AND log payment
         if (req.method === 'POST' && action === 'update-subscription') {
-            const { shop_id, plan_name, monthly_amount, end_date, status } = req.body;
+            const { shop_id, plan_name, monthly_amount, end_date, status, payment_method, transaction_id, notes } = req.body;
 
             await client.query('BEGIN');
 
@@ -214,16 +226,27 @@ async function handler(req, res) {
                 );
 
                 // Insert new subscription record
-                const result = await client.query(
+                const subResult = await client.query(
                     `INSERT INTO subscriptions (shop_id, plan_name, monthly_amount, end_date, status, start_date)
                      VALUES ($1, $2, $3, $4, $5, NOW())
                      RETURNING *`,
                     [shop_id, plan_name, monthly_amount, end_date || null, status]
                 );
 
+                const newSub = subResult.rows[0];
+
+                // NEW: Log Payment if amount > 0
+                if (monthly_amount > 0) {
+                    await client.query(
+                        `INSERT INTO payments (shop_id, subscription_id, amount, payment_method, transaction_id, notes, status)
+                         VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED')`,
+                        [shop_id, newSub.id, monthly_amount, payment_method || 'CASH', transaction_id, notes]
+                    );
+                }
+
                 await client.query('COMMIT');
 
-                return res.status(200).json({ success: true, subscription: result.rows[0] });
+                return res.status(200).json({ success: true, subscription: newSub });
             } catch (err) {
                 await client.query('ROLLBACK');
                 throw err;
@@ -248,6 +271,26 @@ async function handler(req, res) {
             }
 
             return res.status(200).json({ subscription: result.rows[0] });
+        }
+
+        // GET /api/admin?action=subscription-history&shopId=X
+        if (req.method === 'GET' && action === 'subscription-history') {
+            const { shopId } = req.query;
+            const result = await client.query(
+                `SELECT * FROM subscriptions WHERE shop_id = $1 ORDER BY created_at DESC`,
+                [shopId]
+            );
+            return res.status(200).json(result.rows);
+        }
+
+        // GET /api/admin?action=payment-history&shopId=X
+        if (req.method === 'GET' && action === 'payment-history') {
+            const { shopId } = req.query;
+            const result = await client.query(
+                `SELECT * FROM payments WHERE shop_id = $1 ORDER BY payment_date DESC`,
+                [shopId]
+            );
+            return res.status(200).json(result.rows);
         }
 
         // GET /api/admin?action=get-shop-credentials&shopId=X
@@ -420,6 +463,79 @@ async function handler(req, res) {
                 await client.query('ROLLBACK');
                 throw err;
             }
+        }
+
+        // POST /api/admin?action=update-plan
+        // Update subscription plan configuration
+        if (req.method === 'POST' && action === 'update-plan') {
+            const { plan_code, plan_name, duration_days, price_inr, features } = req.body;
+
+            if (!plan_code) {
+                return res.status(400).json({ error: 'plan_code is required' });
+            }
+
+            // Validate plan exists
+            const planCheck = await client.query(
+                'SELECT * FROM subscription_plans WHERE plan_code = $1',
+                [plan_code]
+            );
+
+            if (planCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Plan not found' });
+            }
+
+            // Build update query dynamically
+            const updates = [];
+            const values = [];
+            let paramCount = 1;
+
+            if (plan_name !== undefined) {
+                updates.push(`plan_name = $${paramCount++}`);
+                values.push(plan_name);
+            }
+
+            if (duration_days !== undefined) {
+                // Don't allow changing FREE_TRIAL duration
+                if (plan_code !== 'FREE_TRIAL') {
+                    updates.push(`duration_days = $${paramCount++}`);
+                    values.push(duration_days);
+                }
+            }
+
+            if (price_inr !== undefined) {
+                // Don't allow changing FREE_TRIAL price
+                if (plan_code !== 'FREE_TRIAL') {
+                    updates.push(`price_inr = $${paramCount++}`);
+                    values.push(price_inr);
+                }
+            }
+
+            if (features !== undefined) {
+                updates.push(`features = $${paramCount++}`);
+                values.push(JSON.stringify(features));
+            }
+
+            if (updates.length === 0) {
+                return res.status(400).json({ error: 'No updates provided' });
+            }
+
+            // Add plan_code to values for WHERE clause
+            values.push(plan_code);
+
+            const updateQuery = `
+                UPDATE subscription_plans 
+                SET ${updates.join(', ')}, updated_at = NOW()
+                WHERE plan_code = $${paramCount}
+                RETURNING *
+            `;
+
+            const result = await client.query(updateQuery, values);
+
+            return res.status(200).json({
+                success: true,
+                message: 'Plan updated successfully',
+                plan: result.rows[0]
+            });
         }
 
         return res.status(404).json({ error: 'Unknown Action' });

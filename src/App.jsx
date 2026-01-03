@@ -21,6 +21,8 @@ import ManageStations from './components/ManageStations'
 
 import { playAlarm } from './utils/alarm'
 import TransferStations from './components/TransferStations'
+import { SubscriptionProvider } from './contexts/SubscriptionContext'
+import SubscriptionStatusBadge from './components/SubscriptionStatus'
 
 function App() {
   const [subscriptionExpired, setSubscriptionExpired] = useState({ expired: false, message: '' })
@@ -1298,159 +1300,169 @@ function App() {
   // Show loading while checking auth
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+      <SubscriptionProvider>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
         </div>
-      </div>
+      </SubscriptionProvider>
     )
   }
 
   // Show login if not authenticated
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />
+    return (
+      <SubscriptionProvider>
+        <Login onLogin={handleLogin} />
+      </SubscriptionProvider>
+    )
   }
 
   // Show Subscription Expired Message
   if (subscriptionExpired.expired) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-gray-100">
-          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-            <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Subscription Expired</h2>
-          <p className="text-gray-600 mb-8 leading-relaxed">
-            {subscriptionExpired.message || 'Your subscription plan has expired. Please make a payment to continue using the service.'}
-          </p>
-          <div className="space-y-3">
-            <button
-              onClick={handleRenewSubscription}
-              className="w-full bg-green-600 text-white font-medium py-3 px-4 rounded-xl hover:bg-green-700 transition-all duration-200 shadow-lg shadow-green-200 hover:shadow-green-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+      <SubscriptionProvider>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-gray-100">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+              <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Pay Now & Renew
-            </button>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full bg-blue-50 text-blue-600 font-medium py-3 px-4 rounded-xl hover:bg-blue-100 transition-all duration-200"
-            >
-              Check Status Again
-            </button>
-            <button
-              onClick={handleLogout}
-              className="w-full bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-xl hover:bg-gray-100 transition-all duration-200 border border-gray-200"
-            >
-              Logout
-            </button>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Subscription Expired</h2>
+            <p className="text-gray-600 mb-8 leading-relaxed">
+              {subscriptionExpired.message || 'Your subscription plan has expired. Please make a payment to continue using the service.'}
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={handleRenewSubscription}
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium py-3 px-4 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              >
+                Renew Subscription
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-xl hover:bg-gray-100 transition-all duration-200 border border-gray-200"
+              >
+                Check Status Again
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-xl hover:bg-gray-100 transition-all duration-200 border border-gray-200"
+              >
+                Logout
+              </button>
+            </div>
+            <p className="mt-6 text-xs text-gray-400">
+              Contact support if you believe this is an error.
+            </p>
           </div>
-          <p className="mt-6 text-xs text-gray-400">
-            Contact support if you believe this is an error.
-          </p>
         </div>
-      </div>
+      </SubscriptionProvider>
     )
   }
 
   // Show Super Admin Dashboard (unless viewing a shop)
   if (userRole === 'SUPER_ADMIN' && !viewingShopDashboard) {
-    return <AdminDashboard onLogout={handleLogout} onManageShop={handleManageShop} />
+    return (
+      <SubscriptionProvider>
+        <AdminDashboard onLogout={handleLogout} onManageShop={handleManageShop} />
+      </SubscriptionProvider>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Left Sidebar - Professional Design - Hidden by default, toggle to open */}
-      <aside className={`fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out shadow-lg ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}>
-        <div className="flex flex-col h-full">
-          {/* Sidebar Header with Logo */}
-          <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-gray-50 to-white">
-            {/* Logo at Top */}
-            <div className="mb-6 flex justify-center">
-              <Logo showText={true} textSize="text-xl sm:text-2xl" className="flex-col items-center" shopName={shopName || 'GAMERS SPOT'} />
+    <SubscriptionProvider>
+      <div className="min-h-screen bg-gray-50">
+        {/* Left Sidebar - Professional Design - Hidden by default, toggle to open */}
+        <aside className={`fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out shadow-lg ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}>
+          <div className="flex flex-col h-full">
+            {/* Sidebar Header with Logo */}
+            <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-gray-50 to-white">
+              {/* Logo at Top */}
+              <div className="mb-6 flex justify-center">
+                <Logo showText={true} textSize="text-xl sm:text-2xl" className="flex-col items-center" shopName={shopName || 'GAMERS SPOT'} />
+              </div>
+
+              {/* Shop Selector for Super Admin */}
+              {userRole === 'SUPER_ADMIN' && availableShops.length > 0 && (
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wider">
+                    Select Shop
+                  </label>
+                  <select
+                    value={shopId || ''}
+                    onChange={(e) => handleShopChange(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    {availableShops.map((shop) => (
+                      <option key={shop.id} value={shop.id}>
+                        {shop.name} (ID: {shop.id})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-gray-500 italic">
+                    Viewing: <span className="font-semibold text-blue-600">{shopName}</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Navigation Title */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                  Navigation
+                </h2>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded hover:bg-gray-100"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            {/* Shop Selector for Super Admin */}
-            {userRole === 'SUPER_ADMIN' && availableShops.length > 0 && (
-              <div className="mb-4">
-                <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wider">
-                  Select Shop
-                </label>
-                <select
-                  value={shopId || ''}
-                  onChange={(e) => handleShopChange(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                >
-                  {availableShops.map((shop) => (
-                    <option key={shop.id} value={shop.id}>
-                      {shop.name} (ID: {shop.id})
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[10px] text-gray-500 italic">
-                  Viewing: <span className="font-semibold text-blue-600">{shopName}</span>
-                </p>
-              </div>
-            )}
-
-            {/* Navigation Title */}
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                Navigation
-              </h2>
+            {/* Menu Items */}
+            <nav className="flex-1 p-3 pt-6 space-y-1 overflow-y-auto">
+              {/* Dashboard - First Menu Item */}
               <button
-                onClick={() => setSidebarOpen(false)}
-                className="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded hover:bg-gray-100"
+                onClick={() => {
+                  setShowDashboard(true)
+                  setActiveReport(null)
+                  setSidebarOpen(false)
+                }}
+                className={`w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all flex items-center gap-3 ${showDashboard && !activeReport
+                  ? 'bg-blue-50 text-blue-600 border-l-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
+                <span>Dashboard</span>
               </button>
-            </div>
-          </div>
 
-          {/* Menu Items */}
-          <nav className="flex-1 p-3 pt-6 space-y-1 overflow-y-auto">
-            {/* Dashboard - First Menu Item */}
-            <button
-              onClick={() => {
-                setShowDashboard(true)
-                setActiveReport(null)
-                setSidebarOpen(false)
-              }}
-              className={`w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all flex items-center gap-3 ${showDashboard && !activeReport
-                ? 'bg-blue-50 text-blue-600 border-l-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              <span>Dashboard</span>
-            </button>
+              {/* Pricing Menu */}
+              <button
+                onClick={() => {
+                  setShowPricingConfig(true)
+                  setActiveReport(null)
+                  setShowDashboard(true)
+                  setSidebarOpen(false)
+                }}
+                className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                <span>Pricing</span>
+              </button>
 
-            {/* Pricing Menu */}
-            <button
-              onClick={() => {
-                setShowPricingConfig(true)
-                setActiveReport(null)
-                setShowDashboard(true)
-                setSidebarOpen(false)
-              }}
-              className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-3"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-              <span>Pricing</span>
-            </button>
-
-            {/* Add New Systems Menu with Sub-options (HIDDEN)
+              {/* Add New Systems Menu with Sub-options (HIDDEN)
             <div>
               <button onClick={() => { setAddSystemsMenuOpen(!addSystemsMenuOpen); setShowDashboard(true); setActiveReport(null); }} className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1482,389 +1494,394 @@ function App() {
             </div>
             */}
 
-            {/* Snacks Menu */}
-            <button
-              onClick={() => {
-                setShowSnacksConfig(true)
-                setActiveReport(null)
-                setShowDashboard(true)
-                setSidebarOpen(false)
-              }}
-              className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-3"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-              </svg>
-              <span>Snacks</span>
-            </button>
-
-            {/* Manage Stations Menu */}
-            <button
-              onClick={() => {
-                setShowManageStations(true)
-                setActiveReport(null)
-                setShowDashboard(true)
-                setSidebarOpen(false)
-              }}
-              className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-3"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-              </svg>
-              <span>Manage Stations</span>
-            </button>
-
-            {/* Reports Menu with Sub-options */}
-            <div>
-              <button onClick={() => setReportsMenuOpen(!reportsMenuOpen)} className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  <span>Reports</span>
-                </div>
-                <svg className={`w-4 h-4 transition-transform ${reportsMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              {/* Snacks Menu */}
+              <button
+                onClick={() => {
+                  setShowSnacksConfig(true)
+                  setActiveReport(null)
+                  setShowDashboard(true)
+                  setSidebarOpen(false)
+                }}
+                className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
                 </svg>
+                <span>Snacks</span>
               </button>
-              {reportsMenuOpen && (
-                <div className="mt-1 ml-7 space-y-0.5">
-                  <button onClick={() => { setActiveReport('usage'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                    <span>System Usage</span>
-                  </button>
-                  <button onClick={() => { setActiveReport('daily-revenue'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                    <span>Daily Revenue</span>
-                  </button>
-                  <button onClick={() => { setActiveReport('monthly-revenue'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                    <span>Monthly Revenue</span>
-                  </button>
-                  <button onClick={() => { setActiveReport('customer-report'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                    <span>Customer Report</span>
-                  </button>
-                  <button onClick={() => { setActiveReport('snacks-report'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                    <span>Snacks Report</span>
-                  </button>
-                  <button onClick={() => { setActiveReport('transfer-stations'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                    <span>Transfer Stations</span>
-                  </button>
-                  <button onClick={() => { setShowBonusConfig(true); setActiveReport(null); setShowDashboard(true); setSidebarOpen(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>Bonus Time Config</span>
-                  </button>
+
+              {/* Manage Stations Menu */}
+              <button
+                onClick={() => {
+                  setShowManageStations(true)
+                  setActiveReport(null)
+                  setShowDashboard(true)
+                  setSidebarOpen(false)
+                }}
+                className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+                <span>Manage Stations</span>
+              </button>
+
+              {/* Reports Menu with Sub-options */}
+              <div>
+                <button onClick={() => setReportsMenuOpen(!reportsMenuOpen)} className="w-full px-4 py-2.5 rounded-md font-medium text-sm transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <span>Reports</span>
+                  </div>
+                  <svg className={`w-4 h-4 transition-transform ${reportsMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {reportsMenuOpen && (
+                  <div className="mt-1 ml-7 space-y-0.5">
+                    <button onClick={() => { setActiveReport('usage'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>System Usage</span>
+                    </button>
+                    <button onClick={() => { setActiveReport('daily-revenue'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>Daily Revenue</span>
+                    </button>
+                    <button onClick={() => { setActiveReport('monthly-revenue'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>Monthly Revenue</span>
+                    </button>
+                    <button onClick={() => { setActiveReport('customer-report'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>Customer Report</span>
+                    </button>
+                    <button onClick={() => { setActiveReport('snacks-report'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>Snacks Report</span>
+                    </button>
+                    <button onClick={() => { setActiveReport('transfer-stations'); setShowDashboard(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>Transfer Stations</span>
+                    </button>
+                    <button onClick={() => { setShowBonusConfig(true); setActiveReport(null); setShowDashboard(true); setSidebarOpen(false); }} className="w-full px-4 py-2 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <span>Bonus Time Config</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </nav>
+
+            {/* Logout Button */}
+            <div className="p-4 border-t border-gray-200">
+              {/* Back to Admin Dashboard button for Super Admin */}
+              {userRole === 'SUPER_ADMIN' && viewingShopDashboard && (
+                <button
+                  onClick={handleBackToAdminDashboard}
+                  className="w-full px-4 py-3 mb-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-all flex items-center justify-center gap-2 border border-blue-200"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  <span>Back to Admin</span>
+                </button>
+              )}
+
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-3 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg font-medium transition-all flex items-center justify-center gap-2 border border-red-200"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Logout</span>
+              </button>
+
+              {/* User Info */}
+              <div className="mt-3 text-center text-xs text-gray-500">
+                Logged in as: <span className="font-medium text-gray-700">{localStorage.getItem('username') || 'Admin'}</span>
+              </div>
+            </div>
+
+            {/* Sidebar Footer */}
+            <div className="p-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-center">
+                <Logo showText={true} textSize="text-xs" className="flex-col items-center" shopName={shopName || 'GAMERS SPOT'} />
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Sidebar Overlay (Mobile) - Only show when sidebar is open and no report is active */}
+        {sidebarOpen && !activeReport && (
+          <div
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <header className={`sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur-sm shadow-sm transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'
+          } ${activeReport ? 'hidden' : ''}`}>
+          <div className="container mx-auto px-4 sm:px-6 py-3">
+            <div className="flex justify-between items-center gap-4">
+              {/* Left: Hamburger Menu */}
+              <div className="flex items-center">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="text-gray-600 hover:text-gray-900 transition-colors p-2 rounded-md hover:bg-gray-100"
+                  aria-label="Open menu"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Center: Welcome Message */}
+              <div className="flex-1 flex flex-col justify-center items-center gap-2">
+
+                <h1
+                  className="text-xl sm:text-2xl md:text-3xl font-bold text-center italic"
+                  style={{
+                    background: 'linear-gradient(135deg, #8b5cf6 0%, #3b82f6 50%, #6366f1 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    textShadow: '0 2px 10px rgba(139, 92, 246, 0.3)',
+                    letterSpacing: '-0.02em',
+                    fontStyle: 'italic'
+                  }}
+                >
+                  Welcome to {shopName || 'Gamers Spot'} Control Center
+                </h1>
+                <p
+                  className="text-xs sm:text-sm text-gray-600 text-center italic"
+                  style={{
+                    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                    color: '#6b7280',
+                    letterSpacing: '0.01em',
+                    lineHeight: '1.5',
+                    fontStyle: 'italic'
+                  }}
+                >
+                  Monitor sessions, manage stations, and generate invoices seamlessly.
+                </p>
+                {/* Subscription Status Badge */}
+                <div className="mt-2">
+                  <SubscriptionStatusBadge />
+                </div>
+              </div>
+
+              {/* Right: Time Display */}
+              <div className="text-right bg-gradient-to-br from-gray-50 to-gray-100 px-4 py-2.5 rounded-lg border border-gray-200 shadow-sm">
+                <div className="text-sm font-semibold text-gray-900">{istTime || getIndianTimeString()}</div>
+                <div className="text-xs text-gray-600 font-medium">{istDate || formatIndianDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5 font-medium">IST (Asia/Kolkata)</div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className={`container mx-auto px-4 sm:px-6 py-4 sm:py-6 transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'
+          } ${!showDashboard && activeReport ? 'hidden' : ''}`}>
+          {/* Dashboard Stats Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
+              <p className="text-gray-600 text-xs font-medium mb-2 uppercase tracking-wider">Active Sessions</p>
+              <p className="text-2xl font-semibold text-gray-900">{activeStations}</p>
+            </div>
+
+            <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
+              <p className="text-gray-600 text-xs font-medium mb-2 uppercase tracking-wider">Completed Sessions</p>
+              <p className="text-2xl font-semibold text-gray-900">{stations.filter(s => s.isDone === true && (s.elapsedTime || 0) > 0).length}</p>
+            </div>
+
+            <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
+              <p className="text-gray-600 text-xs font-medium mb-2 uppercase tracking-wider">Total Stations</p>
+              <p className="text-2xl font-semibold text-gray-900">{stations.length}</p>
+            </div>
+
+            <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-gray-600 text-xs font-medium uppercase tracking-wider">Revenue</p>
+                <button
+                  onClick={() => setShowRevenue(!showRevenue)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded hover:bg-gray-100"
+                  title={showRevenue ? 'Hide revenue' : 'Show revenue'}
+                >
+                  {showRevenue ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0L3 3m3.29 3.29L3 3m6.29 6.29l3.29 3.29m0 0L9.29 9.29m3.29 3.29L9.29 9.29m6.29 6.29l3.29 3.29M12 12l3.29 3.29m0 0L12 12m3.29 3.29L12 12" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="text-2xl font-semibold text-gray-900">
+                {showRevenue ? `₹${todayRevenue.toFixed(2)}` : '₹****'}
+              </p>
+            </div>
+          </div>
+
+          {/* Stats and Reset All Button */}
+          <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-4 text-sm font-medium flex-wrap text-gray-600">
+              <span>Playstation: <span className="text-gray-900">{stations.filter(s => s.gameType === GAME_TYPES.PLAYSTATION).length}</span></span>
+              <span className="text-gray-300 hidden sm:inline">|</span>
+              <span>Wheel: <span className="text-gray-900">{stations.filter(s => s.gameType === GAME_TYPES.STEERING_WHEEL).length}</span></span>
+              <span className="text-gray-300 hidden sm:inline">|</span>
+              <span>System: <span className="text-gray-900">{stations.filter(s => s.gameType === GAME_TYPES.SYSTEM).length}</span></span>
+            </div>
+            <div className="flex gap-2 flex-wrap w-full sm:w-auto items-center">
+              {subscriptionInfo && (
+                <div className="flex items-center gap-3 animate-fadeIn mr-2">
+                  <span className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${subscriptionInfo.daysRemaining <= 5 ? 'bg-red-50 text-red-600 border-red-200 animate-pulse' :
+                    subscriptionInfo.daysRemaining <= 10 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                      'bg-green-50 text-green-700 border-green-200'
+                    }`}>
+                    <span className="hidden sm:inline">{subscriptionInfo.plan_name === 'TRIAL' ? 'Trial' : 'Plan'} expires in </span>{subscriptionInfo.daysRemaining} days
+                  </span>
+                  {subscriptionInfo.daysRemaining <= 7 && (
+                    <button
+                      onClick={handleRenewSubscription}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition-colors border border-indigo-600 hover:border-indigo-700 flex items-center gap-1"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Renew
+                    </button>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={handleResetAll}
+                className="px-4 py-2 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium text-sm transition-all border border-gray-300 hover:border-gray-400 flex items-center gap-2 shadow-sm"
+                title="Reset all timers"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Reset All</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Content Grid: Station Cards + Billing Panel */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
+            {/* Station Cards Section - Takes 3 columns on large screens */}
+            <div className="lg:col-span-3 order-2 lg:order-1">
+              {/* Responsive Station Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+                {stations.map((station) => (
+                  <StationCard
+                    key={station.id}
+                    station={station}
+                    onUpdate={handleStationUpdate}
+                    onDelete={handleStationDelete}
+                    snacksList={snacksList}
+                    allStations={stations}
+
+                  />
+                ))}
+              </div>
+
+              {/* Empty State */}
+              {stations.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-gray-600 text-sm font-semibold">No stations yet. Add one to get started.</p>
                 </div>
               )}
             </div>
-          </nav>
 
-          {/* Logout Button */}
-          <div className="p-4 border-t border-gray-200">
-            {/* Back to Admin Dashboard button for Super Admin */}
-            {userRole === 'SUPER_ADMIN' && viewingShopDashboard && (
-              <button
-                onClick={handleBackToAdminDashboard}
-                className="w-full px-4 py-3 mb-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-all flex items-center justify-center gap-2 border border-blue-200"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Back to Admin</span>
-              </button>
-            )}
-
-            <button
-              onClick={handleLogout}
-              className="w-full px-4 py-3 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg font-medium transition-all flex items-center justify-center gap-2 border border-red-200"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span>Logout</span>
-            </button>
-
-            {/* User Info */}
-            <div className="mt-3 text-center text-xs text-gray-500">
-              Logged in as: <span className="font-medium text-gray-700">{localStorage.getItem('username') || 'Admin'}</span>
+            {/* Billing Panel - Takes 1 column on large screens, full width on mobile */}
+            <div className="lg:col-span-1 order-1 lg:order-2">
+              <BillingPanel
+                stations={stations}
+                onGenerateInvoice={handleGenerateInvoice}
+                snacksList={snacksList}
+              />
             </div>
           </div>
+        </main>
 
-          {/* Sidebar Footer */}
-          <div className="p-4 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-center">
-              <Logo showText={true} textSize="text-xs" className="flex-col items-center" shopName={shopName || 'GAMERS SPOT'} />
-            </div>
-          </div>
-        </div>
-      </aside>
+        {/* InvoiceViewer */}
+        {invoice && (
+          <InvoiceViewer
+            invoice={invoice}
+            onClose={() => setInvoice(null)}
+            onPaid={handleInvoicePaid}
+            snacksList={snacksList}
+            shopName={shopName || 'Gamers Spot'}
+            upiId={upiId}
+          />
+        )}
 
-      {/* Sidebar Overlay (Mobile) - Only show when sidebar is open and no report is active */}
-      {sidebarOpen && !activeReport && (
-        <div
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+        {/* PricingConfig */}
+        {showPricingConfig && (
+          <PricingConfig
+            onClose={() => setShowPricingConfig(false)}
+          />
+        )}
 
-      <header className={`sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur-sm shadow-sm transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'
-        } ${activeReport ? 'hidden' : ''}`}>
-        <div className="container mx-auto px-4 sm:px-6 py-3">
-          <div className="flex justify-between items-center gap-4">
-            {/* Left: Hamburger Menu */}
-            <div className="flex items-center">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="text-gray-600 hover:text-gray-900 transition-colors p-2 rounded-md hover:bg-gray-100"
-                aria-label="Open menu"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            </div>
+        {/* SnacksConfig */}
+        {showSnacksConfig && (
+          <SnacksConfig
+            onClose={() => {
+              setShowSnacksConfig(false)
+              // Reload snacks when config is closed
+              snacksAPI.getAll(true).then(setSnacksList).catch(console.error)
+            }}
+          />
+        )}
 
-            {/* Center: Welcome Message */}
-            <div className="flex-1 flex flex-col justify-center items-center gap-2">
+        {/* BonusConfig */}
+        {showBonusConfig && (
+          <BonusConfig
+            onClose={() => setShowBonusConfig(false)}
+          />
+        )}
 
-              <h1
-                className="text-xl sm:text-2xl md:text-3xl font-bold text-center italic"
-                style={{
-                  background: 'linear-gradient(135deg, #8b5cf6 0%, #3b82f6 50%, #6366f1 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  textShadow: '0 2px 10px rgba(139, 92, 246, 0.3)',
-                  letterSpacing: '-0.02em',
-                  fontStyle: 'italic'
-                }}
-              >
-                Welcome to {shopName || 'Gamers Spot'} Control Center
-              </h1>
-              <p
-                className="text-xs sm:text-sm text-gray-600 text-center italic"
-                style={{
-                  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                  color: '#6b7280',
-                  letterSpacing: '0.01em',
-                  lineHeight: '1.5',
-                  fontStyle: 'italic'
-                }}
-              >
-                Monitor sessions, manage stations, and generate invoices seamlessly.
-              </p>
-            </div>
+        {/* Manage Stations */}
+        {showManageStations && (
+          <ManageStations
+            onClose={() => setShowManageStations(false)}
+            stations={stations}
+            onStationsUpdate={(updatedStations) => {
+              setStations(updatedStations)
+            }}
+          />
+        )}
 
-            {/* Right: Time Display */}
-            <div className="text-right bg-gradient-to-br from-gray-50 to-gray-100 px-4 py-2.5 rounded-lg border border-gray-200 shadow-sm">
-              <div className="text-sm font-semibold text-gray-900">{istTime || getIndianTimeString()}</div>
-              <div className="text-xs text-gray-600 font-medium">{istDate || formatIndianDate(new Date(), { year: 'numeric', month: 'short', day: 'numeric' })}</div>
-              <div className="text-[10px] text-gray-500 mt-0.5 font-medium">IST (Asia/Kolkata)</div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className={`container mx-auto px-4 sm:px-6 py-4 sm:py-6 transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'
-        } ${!showDashboard && activeReport ? 'hidden' : ''}`}>
-        {/* Dashboard Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
-            <p className="text-gray-600 text-xs font-medium mb-2 uppercase tracking-wider">Active Sessions</p>
-            <p className="text-2xl font-semibold text-gray-900">{activeStations}</p>
-          </div>
-
-          <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
-            <p className="text-gray-600 text-xs font-medium mb-2 uppercase tracking-wider">Completed Sessions</p>
-            <p className="text-2xl font-semibold text-gray-900">{stations.filter(s => s.isDone === true && (s.elapsedTime || 0) > 0).length}</p>
-          </div>
-
-          <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
-            <p className="text-gray-600 text-xs font-medium mb-2 uppercase tracking-wider">Total Stations</p>
-            <p className="text-2xl font-semibold text-gray-900">{stations.length}</p>
-          </div>
-
-          <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-gray-600 text-xs font-medium uppercase tracking-wider">Revenue</p>
-              <button
-                onClick={() => setShowRevenue(!showRevenue)}
-                className="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded hover:bg-gray-100"
-                title={showRevenue ? 'Hide revenue' : 'Show revenue'}
-              >
-                {showRevenue ? (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0L3 3m3.29 3.29L3 3m6.29 6.29l3.29 3.29m0 0L9.29 9.29m3.29 3.29L9.29 9.29m6.29 6.29l3.29 3.29M12 12l3.29 3.29m0 0L12 12m3.29 3.29L12 12" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                )}
-              </button>
-            </div>
-            <p className="text-2xl font-semibold text-gray-900">
-              {showRevenue ? `₹${todayRevenue.toFixed(2)}` : '₹****'}
-            </p>
-          </div>
-        </div>
-
-        {/* Stats and Reset All Button */}
-        <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-4 text-sm font-medium flex-wrap text-gray-600">
-            <span>Playstation: <span className="text-gray-900">{stations.filter(s => s.gameType === GAME_TYPES.PLAYSTATION).length}</span></span>
-            <span className="text-gray-300 hidden sm:inline">|</span>
-            <span>Wheel: <span className="text-gray-900">{stations.filter(s => s.gameType === GAME_TYPES.STEERING_WHEEL).length}</span></span>
-            <span className="text-gray-300 hidden sm:inline">|</span>
-            <span>System: <span className="text-gray-900">{stations.filter(s => s.gameType === GAME_TYPES.SYSTEM).length}</span></span>
-          </div>
-          <div className="flex gap-2 flex-wrap w-full sm:w-auto items-center">
-            {subscriptionInfo && (
-              <div className="flex items-center gap-3 animate-fadeIn mr-2">
-                <span className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${subscriptionInfo.daysRemaining <= 5 ? 'bg-red-50 text-red-600 border-red-200 animate-pulse' :
-                  subscriptionInfo.daysRemaining <= 10 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                    'bg-green-50 text-green-700 border-green-200'
-                  }`}>
-                  <span className="hidden sm:inline">{subscriptionInfo.plan_name === 'TRIAL' ? 'Trial' : 'Plan'} expires in </span>{subscriptionInfo.daysRemaining} days
-                </span>
-                {subscriptionInfo.daysRemaining <= 7 && (
-                  <button
-                    onClick={handleRenewSubscription}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition-colors border border-indigo-600 hover:border-indigo-700 flex items-center gap-1"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Renew
-                  </button>
-                )}
-              </div>
-            )}
-            <button
-              onClick={handleResetAll}
-              className="px-4 py-2 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium text-sm transition-all border border-gray-300 hover:border-gray-400 flex items-center gap-2 shadow-sm"
-              title="Reset all timers"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Reset All</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Main Content Grid: Station Cards + Billing Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
-          {/* Station Cards Section - Takes 3 columns on large screens */}
-          <div className="lg:col-span-3 order-2 lg:order-1">
-            {/* Responsive Station Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
-              {stations.map((station) => (
-                <StationCard
-                  key={station.id}
-                  station={station}
-                  onUpdate={handleStationUpdate}
-                  onDelete={handleStationDelete}
-                  snacksList={snacksList}
-                  allStations={stations}
-
-                />
-              ))}
-            </div>
-
-            {/* Empty State */}
-            {stations.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-gray-600 text-sm font-semibold">No stations yet. Add one to get started.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Billing Panel - Takes 1 column on large screens, full width on mobile */}
-          <div className="lg:col-span-1 order-1 lg:order-2">
-            <BillingPanel
-              stations={stations}
-              onGenerateInvoice={handleGenerateInvoice}
-              snacksList={snacksList}
-            />
-          </div>
-        </div>
-      </main>
-
-      {/* InvoiceViewer */}
-      {invoice && (
-        <InvoiceViewer
-          invoice={invoice}
-          onClose={() => setInvoice(null)}
-          onPaid={handleInvoicePaid}
-          snacksList={snacksList}
-          shopName={shopName || 'Gamers Spot'}
-          upiId={upiId}
-        />
-      )}
-
-      {/* PricingConfig */}
-      {showPricingConfig && (
-        <PricingConfig
-          onClose={() => setShowPricingConfig(false)}
-        />
-      )}
-
-      {/* SnacksConfig */}
-      {showSnacksConfig && (
-        <SnacksConfig
-          onClose={() => {
-            setShowSnacksConfig(false)
-            // Reload snacks when config is closed
-            snacksAPI.getAll(true).then(setSnacksList).catch(console.error)
-          }}
-        />
-      )}
-
-      {/* BonusConfig */}
-      {showBonusConfig && (
-        <BonusConfig
-          onClose={() => setShowBonusConfig(false)}
-        />
-      )}
-
-      {/* Manage Stations */}
-      {showManageStations && (
-        <ManageStations
-          onClose={() => setShowManageStations(false)}
-          stations={stations}
-          onStationsUpdate={(updatedStations) => {
-            setStations(updatedStations)
-          }}
-        />
-      )}
-
-      {/* Reports */}
-      {activeReport && activeReport !== 'transfer-stations' && (
-        <Reports
-          reportType={activeReport}
-          onClose={() => {
-            setActiveReport(null)
-            setShowDashboard(true)
-          }}
-        />
-      )}
-      {/* Transfer Stations Overlay */}
-      {activeReport === 'transfer-stations' && (
-        <TransferStations
-          stations={stations}
-          onTransfer={handleConfirmTransfer}
-          onClose={() => {
-            setActiveReport(null)
-            setShowDashboard(true)
-          }}
-        />
-      )}
-    </div>
+        {/* Reports */}
+        {activeReport && activeReport !== 'transfer-stations' && (
+          <Reports
+            reportType={activeReport}
+            onClose={() => {
+              setActiveReport(null)
+              setShowDashboard(true)
+            }}
+          />
+        )}
+        {/* Transfer Stations Overlay */}
+        {activeReport === 'transfer-stations' && (
+          <TransferStations
+            stations={stations}
+            onTransfer={handleConfirmTransfer}
+            onClose={() => {
+              setActiveReport(null)
+              setShowDashboard(true)
+            }}
+          />
+        )}
+      </div>
+    </SubscriptionProvider>
   )
 }
 
