@@ -147,14 +147,15 @@ async function handler(req, res) {
                 const status = selectedPlanCode === 'FREE_TRIAL' ? 'trial' : 'active';
 
                 await client.query(
-                    `UPDATE subscriptions 
-                     SET current_plan_code = $1, 
-                         computed_status = $2, 
+                    `INSERT INTO subscriptions (shop_id, current_plan_code, computed_status, started_at, expires_at, updated_at)
+                     VALUES ($1, $2, $3, NOW(), NOW() + ($4 || ' days')::INTERVAL, NOW())
+                     ON CONFLICT (shop_id) DO UPDATE 
+                     SET current_plan_code = $2, 
+                         computed_status = $3, 
                          started_at = NOW(),
-                         expires_at = NOW() + ($3 || ' days')::INTERVAL,
-                         updated_at = NOW()
-                     WHERE shop_id = $4`,
-                    [selectedPlanCode, status, duration, shopId]
+                         expires_at = NOW() + ($4 || ' days')::INTERVAL,
+                         updated_at = NOW()`,
+                    [shopId, selectedPlanCode, status, duration]
                 );
 
                 // Audit Log
@@ -289,9 +290,15 @@ async function handler(req, res) {
             const { shopId } = req.query;
 
             const result = await client.query(
-                `SELECT * FROM subscriptions 
-                 WHERE shop_id = $1 
-                 ORDER BY created_at DESC 
+                `SELECT 
+                    sub.*, 
+                    sub.current_plan_code as plan_name,
+                    sub.computed_status as status,
+                    sub.expires_at as end_date,
+                    p.price_inr as monthly_amount
+                 FROM subscriptions sub
+                 LEFT JOIN subscription_plans p ON sub.current_plan_code = p.plan_code
+                 WHERE sub.shop_id = $1 
                  LIMIT 1`,
                 [shopId]
             );
