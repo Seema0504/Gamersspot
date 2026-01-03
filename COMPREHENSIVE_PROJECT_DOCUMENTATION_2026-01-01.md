@@ -1,6 +1,6 @@
 # 🎮 Gamers Spot - Comprehensive Project Documentation
-**Generated:** January 2, 2026  
-**Version:** 2.5  
+**Generated:** January 3, 2026  
+**Version:** 3.0  
 **Project Type:** Gaming Station Management System
 
 ---
@@ -362,12 +362,66 @@ All timestamps are stored in **UTC** and dynamically converted to **Indian Stand
 
 ---
 
+### Table 9: `subscriptions`
+**Purpose:** Stores active subscription state for each shop
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL | Primary Key |
+| `shop_id` | INTEGER | Shop Identifier (Foreign Key) |
+| `current_plan_code` | VARCHAR(50) | Linked Plan Code |
+| `computed_status` | VARCHAR(20) | 'trial', 'active', 'grace', 'expired' |
+| `expires_at` | TIMESTAMPTZ | Expiration Timestamp (UTC) |
+| `grace_ends_at` | TIMESTAMPTZ | Grace Period End (UTC) |
+
+### Table 10: `subscription_plans`
+**Purpose:** Defines available pricing tiers and features
+| Column | Type | Description |
+|--------|------|-------------|
+| `plan_code` | VARCHAR(50) | Unique Code (e.g., 'MONTHLY') |
+| `plan_name` | VARCHAR(100) | Display Name |
+| `price_inr` | NUMERIC(10,2) | Cost in Rupees |
+| `duration_days` | INTEGER | Plan Duration |
+| `features` | JSONB | Usage limits and flags |
+
+### Table 11: `subscription_events`
+**Purpose:** Immutable audit log of lifecycle changes
+| Column | Type | Description |
+|--------|------|-------------|
+| `event_type` | VARCHAR(50) | type: 'renewed', 'expired', 'upgraded' |
+| `old_status` | VARCHAR(20) | Previous status |
+| `new_status` | VARCHAR(20) | New status |
+| `metadata` | JSONB | Contextual details (payment info, etc.) |
+
+### Table 12: `subscription_config`
+**Purpose:** Global system settings
+| Column | Type | Description |
+|--------|------|-------------|
+| `key` | VARCHAR(100) | Setting Key (e.g., 'grace_period_days') |
+| `value` | TEXT | Setting Value |
+
+
+---
+
 ## 🔄 Application Flow
 *(Refer to version 2.1 documentation for standard flows - Unchanged in v2.4)*
 
 ---
 
-## 🚀 Deployment Architecture
+## � API Endpoints keys
+
+### Subscription System
+| Method | Endpoint | Query Params | Description |
+|--------|----------|--------------|-------------|
+| **GET** | `/api/subscriptions` | `action=status` | Get current shop subscription status |
+| **GET** | `/api/subscriptions` | `action=plans` | List available subscription plans |
+| **POST** | `/api/subscriptions` | `action=renew` | Renew or upgrade subscription |
+| **GET** | `/api/subscriptions` | `action=events` | Get subscription audit log |
+| **POST** | `/api/admin` | `action=update-plan` | Modify plan details (Super Admin) |
+
+
+---
+
+## �🚀 Deployment Architecture
 
 ### Local Development
 
@@ -425,6 +479,38 @@ POSTGRES_URL=postgresql://postgres:[PASSWORD]@[PROD-PROJECT].pooler.supabase.com
 ---
 
 ## 📜 Version History & Changelog
+
+### Version 3.0 - January 3, 2026 (Autonomous Subscription System)
+
+#### Core Features
+1. **Autonomous Subscription Engine**:
+   - **Lazy Evaluation**: Subscription status is computed on-demand during API requests, removing the need for unreliable cron jobs.
+   - **Race-Safe Operations**: All status updates and renewals use strict database transactions with row-level locking (`FOR UPDATE`) to prevent race conditions.
+   - **Audit Trail**: Every status change, renewal, or system action is logged in a dedicated `subscription_events` table for complete accountability.
+   - **Grace Period**: Native support for a 3-day grace period before service interruption.
+
+2. **Super Admin Enhancements**:
+   - **Dynamic Plan Configuration**: New interface allowing Super Admins to modify pricing, duration, and feature limits without code changes.
+   - **Sidebar Navigation**: Implemented a professional, collapsible sidebar menu with "System Settings" to replace the header-based admin controls.
+   - **Plan Management**: Ability to view and update 5 default subscription tiers (Trial, Monthly, Quarterly, Semi-Annual, Yearly).
+
+#### Database Architecture (+4 Tables)
+1. **`subscription_plans`**: Defines tiers with JSON-based feature flags (`max_stations`, `max_invoices`).
+2. **`subscriptions`**: Stores shop-specific active state, expirations, and computed status.
+3. **`subscription_events`**: Immutable audit log of all lifecycle events.
+4. **`subscription_config`**: Key-value store for global settings (e.g., `grace_period_days`).
+
+#### Frontend Integration
+- **SubscriptionContext**: Global React context for managing subscription state across the app.
+- **SubscriptionStatusBadge**: Real-time visual indicator of account status (Active/Grace/Expired).
+- **Smart Middleware**: API protection that enforces subscription validity for write operations while allowing read access.
+
+#### API Extensions
+- `GET /api/subscriptions?action=status`: Health check for subscription state.
+- `GET /api/subscriptions?action=plans`: Public endpoint for pricing tiers.
+- `POST /api/subscriptions?action=renew`: Process renewals and upgrades.
+- `POST /api/admin?action=update-plan`: Admin endpoint for plan modification.
+
 
 ### Version 2.5 - January 2, 2026 (Super Admin & Critical Fixes)
 
@@ -628,4 +714,4 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 ---
 
 **End of Documentation**  
-*Last Updated: January 2, 2026*
+*Last Updated: January 3, 2026*
