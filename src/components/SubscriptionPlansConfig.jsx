@@ -31,7 +31,16 @@ export default function SubscriptionPlansConfig({ onClose }) {
             if (response.ok) {
                 const data = await response.json();
                 console.log('Plans API Response:', data);
-                setPlans(data.plans || []);
+                // Map DB columns to frontend properties
+                const formattedPlans = (data.plans || []).map(p => ({
+                    ...p,
+                    code: p.plan_code,
+                    name: p.plan_name,
+                    price: parseFloat(p.price_inr),
+                    duration_days: p.duration_days,
+                    features: p.features
+                }));
+                setPlans(formattedPlans);
                 setError(null);
             } else {
                 const errorData = await response.json();
@@ -325,11 +334,7 @@ export default function SubscriptionPlansConfig({ onClose }) {
                                         value={editingPlan.duration_days}
                                         onChange={(e) => setEditingPlan({ ...editingPlan, duration_days: e.target.value })}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        disabled={editingPlan.code === 'FREE_TRIAL'}
                                     />
-                                    {editingPlan.code === 'FREE_TRIAL' && (
-                                        <p className="text-xs text-gray-500 mt-1">Trial duration is fixed at 14 days</p>
-                                    )}
                                 </div>
 
                                 {/* Price */}

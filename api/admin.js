@@ -502,11 +502,9 @@ async function handler(req, res) {
             }
 
             if (duration_days !== undefined) {
-                // Don't allow changing FREE_TRIAL duration
-                if (plan_code !== 'FREE_TRIAL') {
-                    updates.push(`duration_days = $${paramCount++}`);
-                    values.push(duration_days);
-                }
+                // Allow changing duration for all plans
+                updates.push(`duration_days = $${paramCount++}`);
+                values.push(duration_days);
             }
 
             if (price_inr !== undefined) {
