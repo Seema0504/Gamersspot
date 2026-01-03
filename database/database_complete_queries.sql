@@ -931,6 +931,30 @@ ALTER TABLE ONLY public.subscription_events
 
 
 
+-- 
+-- Data for Name: subscription_config; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO public.subscription_config (key, value, description) VALUES
+('grace_period_days', '3', 'Number of days after expiration before service is suspended'),
+('default_trial_plan', 'FREE_TRIAL', 'Plan code for new shop trials'),
+('status_check_interval_minutes', '60', 'How often to lazy-check subscription status in minutes')
+ON CONFLICT (key) DO NOTHING;
+
+
+-- 
+-- Data for Name: subscription_plans; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO public.subscription_plans (plan_code, plan_name, duration_days, price_inr, features, is_active, display_order) VALUES
+('FREE_TRIAL', 'Free Trial', 14, 0.00, '{"max_stations": 5, "reports": true, "support": "email"}', true, 1),
+('MONTHLY', 'Monthly Premium', 30, 999.00, '{"max_stations": 20, "reports": true, "support": "priority"}', true, 2),
+('QUARTERLY', 'Quarterly Saver', 90, 2699.00, '{"max_stations": 50, "reports": true, "support": "priority", "discount_percent": 10}', true, 3),
+('SEMI_ANNUAL', 'Semi-Annual Pro', 180, 4999.00, '{"max_stations": 100, "reports": true, "support": "24/7", "discount_percent": 15}', true, 4),
+('YEARLY', 'Yearly Elite', 365, 8999.00, '{"max_stations": 999, "reports": true, "support": "24/7", "discount_percent": 25}', true, 5)
+ON CONFLICT (plan_code) DO NOTHING;
+
+
 --
 -- PostgreSQL database dump complete
 --
