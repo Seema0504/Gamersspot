@@ -81,7 +81,7 @@ BEGIN
         trial_duration := 14;
     END IF;
     
-    INSERT INTO shop_subscriptions (
+    INSERT INTO subscriptions (
         shop_id,
         current_plan_code,
         started_at,
@@ -343,45 +343,10 @@ CREATE TABLE public.pricing_rules (
 );
 
 
---
--- Name: shop_subscriptions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.shop_subscriptions (
-    id integer NOT NULL,
-    shop_id integer NOT NULL,
-    current_plan_code character varying(50) NOT NULL,
-    started_at timestamp with time zone DEFAULT now() NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    grace_ends_at timestamp with time zone,
-    computed_status character varying(20) DEFAULT 'trial'::character varying NOT NULL,
-    last_status_check_at timestamp with time zone DEFAULT now(),
-    auto_renew boolean DEFAULT false,
-    next_billing_date timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT valid_status CHECK (((computed_status)::text = ANY ((ARRAY['trial'::character varying, 'active'::character varying, 'grace'::character varying, 'expired'::character varying])::text[])))
-);
 
 
---
--- Name: shop_subscriptions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.shop_subscriptions_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
 
 
---
--- Name: shop_subscriptions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.shop_subscriptions_id_seq OWNED BY public.shop_subscriptions.id;
 
 
 --
@@ -583,13 +548,17 @@ CREATE SEQUENCE public.subscriptions_id_seq
 CREATE TABLE public.subscriptions (
     id integer DEFAULT nextval('public.subscriptions_id_seq'::regclass) NOT NULL,
     shop_id integer NOT NULL,
-    plan_name character varying(50) NOT NULL,
-    status character varying(50) DEFAULT 'ACTIVE'::character varying NOT NULL,
-    start_date timestamp with time zone DEFAULT now(),
-    end_date timestamp with time zone,
-    monthly_amount numeric DEFAULT 0,
+    current_plan_code character varying(50) NOT NULL,
+    computed_status character varying(20) DEFAULT 'trial'::character varying NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    grace_ends_at timestamp with time zone,
+    last_status_check_at timestamp with time zone DEFAULT now(),
+    auto_renew boolean DEFAULT false,
+    next_billing_date timestamp with time zone,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT valid_status CHECK (((computed_status)::text = ANY ((ARRAY['trial'::character varying, 'active'::character varying, 'grace'::character varying, 'expired'::character varying])::text[])))
 );
 
 
@@ -600,11 +569,7 @@ CREATE TABLE public.subscriptions (
 ALTER TABLE ONLY public.payments ALTER COLUMN id SET DEFAULT nextval('public.payments_id_seq'::regclass);
 
 
---
--- Name: shop_subscriptions id; Type: DEFAULT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY public.shop_subscriptions ALTER COLUMN id SET DEFAULT nextval('public.shop_subscriptions_id_seq'::regclass);
 
 
 --
@@ -717,20 +682,15 @@ ALTER TABLE ONLY public.pricing_rules
     ADD CONSTRAINT pricing_rules_shop_id_game_type_key UNIQUE (shop_id, game_type);
 
 
---
--- Name: shop_subscriptions shop_subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY public.shop_subscriptions
-    ADD CONSTRAINT shop_subscriptions_pkey PRIMARY KEY (id);
 
 
 --
--- Name: shop_subscriptions shop_subscriptions_shop_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: subscriptions subscriptions_shop_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.shop_subscriptions
-    ADD CONSTRAINT shop_subscriptions_shop_id_key UNIQUE (shop_id);
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT subscriptions_shop_id_key UNIQUE (shop_id);
 
 
 --
@@ -827,24 +787,24 @@ CREATE INDEX idx_invoices_shop_id ON public.invoices USING btree (shop_id);
 
 
 --
--- Name: idx_shop_subscriptions_expires_at; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_subscriptions_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_shop_subscriptions_expires_at ON public.shop_subscriptions USING btree (expires_at);
-
-
---
--- Name: idx_shop_subscriptions_shop_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_shop_subscriptions_shop_id ON public.shop_subscriptions USING btree (shop_id);
+CREATE INDEX idx_subscriptions_expires_at ON public.subscriptions USING btree (expires_at);
 
 
 --
--- Name: idx_shop_subscriptions_status; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_subscriptions_shop_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_shop_subscriptions_status ON public.shop_subscriptions USING btree (computed_status);
+CREATE INDEX idx_subscriptions_shop_id ON public.subscriptions USING btree (shop_id);
+
+
+--
+-- Name: idx_subscriptions_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_subscriptions_status ON public.subscriptions USING btree (computed_status);
 
 
 --
@@ -883,10 +843,10 @@ CREATE TRIGGER trigger_auto_create_subscription AFTER INSERT ON public.shops FOR
 
 
 --
--- Name: shop_subscriptions update_shop_subscriptions_updated_at; Type: TRIGGER; Schema: public; Owner: -
+-- Name: subscriptions update_subscriptions_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER update_shop_subscriptions_updated_at BEFORE UPDATE ON public.shop_subscriptions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -913,19 +873,19 @@ ALTER TABLE ONLY public.payments
 
 
 --
--- Name: shop_subscriptions shop_subscriptions_current_plan_code_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: subscriptions subscriptions_current_plan_code_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.shop_subscriptions
-    ADD CONSTRAINT shop_subscriptions_current_plan_code_fkey FOREIGN KEY (current_plan_code) REFERENCES public.subscription_plans(plan_code);
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT subscriptions_current_plan_code_fkey FOREIGN KEY (current_plan_code) REFERENCES public.subscription_plans(plan_code);
 
 
 --
--- Name: shop_subscriptions shop_subscriptions_shop_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: subscriptions subscriptions_shop_id_fkey_cascade; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.shop_subscriptions
-    ADD CONSTRAINT shop_subscriptions_shop_id_fkey FOREIGN KEY (shop_id) REFERENCES public.shops(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT subscriptions_shop_id_fkey_cascade FOREIGN KEY (shop_id) REFERENCES public.shops(id) ON DELETE CASCADE;
 
 
 --
@@ -968,12 +928,7 @@ ALTER TABLE ONLY public.subscription_events
     ADD CONSTRAINT subscription_events_triggered_by_user_id_fkey FOREIGN KEY (triggered_by_user_id) REFERENCES public.admin_users(id);
 
 
---
--- Name: subscriptions subscriptions_shop_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_shop_id_fkey FOREIGN KEY (shop_id) REFERENCES public.shops(id) ON DELETE CASCADE;
 
 
 --
