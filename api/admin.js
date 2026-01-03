@@ -79,12 +79,14 @@ async function handler(req, res) {
 
             const result = await client.query(`
                 SELECT s.*, 
-                       (SELECT status FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_status,
-                       (SELECT plan_name FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_name,
-                       (SELECT end_date FROM subscriptions sub WHERE sub.shop_id = s.id ORDER BY created_at DESC LIMIT 1) as plan_end_date,
+                       sub.computed_status as plan_status,
+                       p.plan_name as plan_name,
+                       sub.expires_at as plan_end_date,
                        (SELECT username FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' ${deletedAtCheck} LIMIT 1) as owner_username,
                        (SELECT id FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' ${deletedAtCheck} LIMIT 1) as owner_id
                 FROM shops s 
+                LEFT JOIN subscriptions sub ON s.id = sub.shop_id
+                LEFT JOIN subscription_plans p ON sub.current_plan_code = p.plan_code
                 ${deletedFilter}
                 ${orderBy}
             `);
@@ -93,7 +95,7 @@ async function handler(req, res) {
 
         // POST /api/admin?action=create-shop
         if (req.method === 'POST' && action === 'create-shop') {
-            const { name, phone, email, address, upiId, ownerUsername, ownerPassword, trialDays } = req.body;
+            const { name, phone, email, address, upiId, ownerUsername, ownerPassword, planCode } = req.body;
 
             // Validate required fields
             if (!name || !phone || !email || !address) {
@@ -105,10 +107,6 @@ async function handler(req, res) {
             if (!phoneRegex.test(phone)) {
                 return res.status(400).json({ error: 'Invalid phone number. Must be a 10-digit Indian mobile number starting with 6, 7, 8, or 9' });
             }
-
-            // Ensure days is treated as integer; default 14 if undefined
-            // If explicitly 0, it means Premium Monthly
-            const daysInput = (trialDays !== undefined && trialDays !== null) ? parseInt(trialDays) : 14;
 
             // 0. Check for duplicate username
             const userCheck = await client.query(
@@ -123,7 +121,7 @@ async function handler(req, res) {
 
             await client.query('BEGIN');
 
-            // 1. Create Shop with all details
+            // 1. Create Shop (Trigger creates default subscription)
             const shopRes = await client.query(
                 `INSERT INTO shops (name, phone, email, address, upi_id, is_active) 
                  VALUES ($1, $2, $3, $4, $5, true) 
@@ -132,20 +130,33 @@ async function handler(req, res) {
             );
             const shopId = shopRes.rows[0].id; // Serial ID
 
-            // 2. Create Subscription
-            if (daysInput === 0) {
-                // Premium Monthly (30 Days)
+            // 2. Update Subscription based on selected plan
+            const selectedPlanCode = planCode || 'FREE_TRIAL';
+
+            // Fetch plan details
+            const planRes = await client.query('SELECT * FROM subscription_plans WHERE plan_code = $1', [selectedPlanCode]);
+
+            if (planRes.rows.length > 0) {
+                const plan = planRes.rows[0];
+                const duration = plan.duration_days;
+                const status = selectedPlanCode === 'FREE_TRIAL' ? 'trial' : 'active';
+
                 await client.query(
-                    `INSERT INTO subscriptions (shop_id, plan_name, monthly_amount, status, end_date) 
-                     VALUES ($1, 'PREMIUM_MONTHLY', 2999, 'ACTIVE', NOW() + INTERVAL '30 days')`,
-                    [shopId]
+                    `UPDATE subscriptions 
+                     SET current_plan_code = $1, 
+                         computed_status = $2, 
+                         started_at = NOW(),
+                         expires_at = NOW() + ($3 || ' days')::INTERVAL,
+                         updated_at = NOW()
+                     WHERE shop_id = $4`,
+                    [selectedPlanCode, status, duration, shopId]
                 );
-            } else {
-                // Trial Period
+
+                // Audit Log
                 await client.query(
-                    `INSERT INTO subscriptions (shop_id, plan_name, monthly_amount, status, end_date) 
-                     VALUES ($1, 'TRIAL', 0, 'ACTIVE', NOW() + INTERVAL '${daysInput} days')`,
-                    [shopId]
+                    `INSERT INTO subscription_events (shop_id, event_type, new_plan_code, new_status, triggered_by, metadata)
+                     VALUES ($1, 'plan_change_on_create', $2, $3, 'super_admin', $4)`,
+                    [shopId, selectedPlanCode, status, JSON.stringify({ reason: 'Initial selection' })]
                 );
             }
 
@@ -217,39 +228,53 @@ async function handler(req, res) {
             await client.query('BEGIN');
 
             try {
-                // Mark all existing subscriptions for this shop as CANCELLED
-                await client.query(
-                    `UPDATE subscriptions 
-                     SET status = 'CANCELLED' 
-                     WHERE shop_id = $1 AND status = 'ACTIVE'`,
-                    [shop_id]
-                );
+                // Determine Plan Code
+                let planCode = 'MONTHLY'; // Default
+                if (plan_name) {
+                    const pRes = await client.query('SELECT plan_code FROM subscription_plans WHERE plan_name = $1 OR plan_code = $1', [plan_name]);
+                    if (pRes.rows.length > 0) planCode = pRes.rows[0].plan_code;
+                    else if (['FREE_TRIAL', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUAL', 'YEARLY'].includes(plan_name.toUpperCase())) planCode = plan_name.toUpperCase();
+                }
 
-                // Insert new subscription record
+                const newStatus = (status && status.toLowerCase() === 'active') ? 'active' : 'trial';
+                const validEndDate = (end_date && end_date !== '') ? new Date(end_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+                // Update existing subscription
                 const subResult = await client.query(
-                    `INSERT INTO subscriptions (shop_id, plan_name, monthly_amount, end_date, status, start_date)
-                     VALUES ($1, $2, $3, $4, $5, NOW())
+                    `UPDATE subscriptions 
+                     SET current_plan_code = $1, 
+                         computed_status = $2, 
+                         expires_at = $3,
+                         updated_at = NOW()
+                     WHERE shop_id = $4
                      RETURNING *`,
-                    [shop_id, plan_name, monthly_amount, end_date || null, status]
+                    [planCode, newStatus, validEndDate, shop_id]
                 );
 
                 const newSub = subResult.rows[0];
 
-                // NEW: Log Payment if amount > 0
                 if (monthly_amount > 0) {
                     await client.query(
                         `INSERT INTO payments (shop_id, subscription_id, amount, payment_method, transaction_id, notes, status)
                          VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED')`,
-                        [shop_id, newSub.id, monthly_amount, payment_method || 'CASH', transaction_id, notes]
+                        [shop_id, newSub ? newSub.id : null, monthly_amount, payment_method || 'CASH', transaction_id || null, notes]
                     );
                 }
+
+                // Audit Log
+                await client.query(
+                    `INSERT INTO subscription_events (shop_id, event_type, new_plan_code, new_status, triggered_by, metadata)
+                     VALUES ($1, 'manual_update', $2, $3, 'super_admin', $4)`,
+                    [shop_id, planCode, newStatus, JSON.stringify({ amount: monthly_amount, notes })]
+                );
 
                 await client.query('COMMIT');
 
                 return res.status(200).json({ success: true, subscription: newSub });
             } catch (err) {
                 await client.query('ROLLBACK');
-                throw err;
+                console.error('Update subscription error:', err);
+                return res.status(500).json({ error: err.message });
             }
         }
 
@@ -277,7 +302,17 @@ async function handler(req, res) {
         if (req.method === 'GET' && action === 'subscription-history') {
             const { shopId } = req.query;
             const result = await client.query(
-                `SELECT * FROM subscriptions WHERE shop_id = $1 ORDER BY created_at DESC`,
+                `SELECT 
+                    e.id,
+                    UPPER(e.new_status) as status,
+                    p.plan_name,
+                    p.price_inr as monthly_amount,
+                    e.created_at as start_date,
+                    e.new_expires_at as end_date
+                 FROM subscription_events e
+                 LEFT JOIN subscription_plans p ON e.new_plan_code = p.plan_code
+                 WHERE e.shop_id = $1 
+                 ORDER BY e.created_at DESC`,
                 [shopId]
             );
             return res.status(200).json(result.rows);

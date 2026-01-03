@@ -13,8 +13,10 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
         email: '',
         address: '',
         upiId: '',
-        trialDays: 14
+        upiId: '',
+        planCode: 'FREE_TRIAL'
     });
+    const [plans, setPlans] = useState([]);
     const [editingShop, setEditingShop] = useState(null); // Shop being edited
     const [showEditModal, setShowEditModal] = useState(false);
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -72,7 +74,23 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
 
     useEffect(() => {
         fetchShops();
+        fetchPlans();
     }, [showDeleted]);
+
+    const fetchPlans = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/admin?action=get-plans', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setPlans(data.plans || []);
+            }
+        } catch (error) {
+            console.error('Error fetching plans:', error);
+        }
+    };
 
     const fetchShops = async () => {
         try {
@@ -117,7 +135,8 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
             if (res.ok) {
                 alert('Shop Created!');
                 fetchShops();
-                setNewShop({ name: '', ownerUsername: '', ownerPassword: '', phone: '', email: '', address: '', upiId: '', trialDays: 14 });
+                fetchShops();
+                setNewShop({ name: '', ownerUsername: '', ownerPassword: '', phone: '', email: '', address: '', upiId: '', planCode: 'FREE_TRIAL' });
             } else {
                 alert(data.error || 'Failed to create shop');
             }
@@ -716,28 +735,29 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                     />
                                 </div>
 
-                                {/* Trial Days */}
+                                {/* Subscription Plan */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Plan</label>
-                                    <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white">
-                                        <button
-                                            type="button"
-                                            className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border-r border-gray-300 text-gray-600 font-bold transition-colors"
-                                            onClick={() => setNewShop({ ...newShop, trialDays: Math.max(0, newShop.trialDays - 1) })}
-                                        >
-                                            -
-                                        </button>
-                                        <div className="flex-1 text-center text-sm font-medium text-gray-700 min-w-[100px] px-2">
-                                            {newShop.trialDays === 0 ? 'Premium (30 Days)' : `${newShop.trialDays} Days Trial`}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border-l border-gray-300 text-gray-600 font-bold transition-colors"
-                                            onClick={() => setNewShop({ ...newShop, trialDays: newShop.trialDays + 1 })}
-                                        >
-                                            +
-                                        </button>
-                                    </div>
+                                    <select
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        value={newShop.planCode}
+                                        onChange={e => setNewShop({ ...newShop, planCode: e.target.value })}
+                                        required
+                                    >
+                                        <option value="" disabled>Select a plan</option>
+                                        {plans.filter(plan => plan.is_active).map(plan => (
+                                            <option key={plan.plan_code} value={plan.plan_code}>
+                                                {plan.plan_name}
+                                                {plan.price_inr > 0 ? ` - ₹${plan.price_inr}` : ' - Free'}
+                                                {' '}({plan.duration_days} Days)
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {newShop.planCode && plans.find(p => p.plan_code === newShop.planCode) && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Includes: {plans.find(p => p.plan_code === newShop.planCode).duration_days} days validity
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Submit Button */}
