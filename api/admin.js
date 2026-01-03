@@ -79,7 +79,12 @@ async function handler(req, res) {
 
             const result = await client.query(`
                 SELECT s.*, 
-                       sub.computed_status as plan_status,
+                       CASE 
+                           WHEN sub.expires_at > NOW() THEN 
+                               (CASE WHEN sub.current_plan_code = 'FREE_TRIAL' THEN 'trial' ELSE 'active' END)
+                           WHEN sub.current_plan_code != 'FREE_TRIAL' AND NOW() < (sub.expires_at + INTERVAL '3 days') THEN 'grace'
+                           ELSE 'expired'
+                       END as plan_status,
                        p.plan_name as plan_name,
                        sub.expires_at as plan_end_date,
                        (SELECT username FROM admin_users u WHERE u.shop_id = s.id AND u.role = 'SHOP_OWNER' ${deletedAtCheck} LIMIT 1) as owner_username,
