@@ -1042,12 +1042,30 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                 <select
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     value={subscriptionData.plan_name}
-                                    onChange={e => setSubscriptionData({ ...subscriptionData, plan_name: e.target.value })}
+                                    onChange={e => {
+                                        const code = e.target.value;
+                                        const selectedPlan = plans.find(p => p.plan_code === code);
+                                        if (selectedPlan) {
+                                            const now = new Date();
+                                            const endDate = new Date(now.getTime() + (selectedPlan.duration_days) * 24 * 60 * 60 * 1000);
+                                            const endDateStr = endDate.toISOString().split('T')[0];
+                                            setSubscriptionData({
+                                                ...subscriptionData,
+                                                plan_name: code,
+                                                monthly_amount: selectedPlan.price_inr,
+                                                end_date: endDateStr
+                                            });
+                                        } else {
+                                            setSubscriptionData({ ...subscriptionData, plan_name: code });
+                                        }
+                                    }}
                                 >
-                                    <option value="TRIAL">Trial (Free)</option>
-                                    <option value="PREMIUM_MONTHLY">Premium Monthly</option>
-                                    <option value="PREMIUM_YEARLY">Premium Yearly</option>
-                                    <option value="LIFETIME">Lifetime Access</option>
+                                    <option value="" disabled>Select Plan</option>
+                                    {plans.filter(p => p.is_active).map(plan => (
+                                        <option key={plan.plan_code} value={plan.plan_code}>
+                                            {plan.plan_name} ({plan.duration_days} days) - ₹{plan.price_inr}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div>

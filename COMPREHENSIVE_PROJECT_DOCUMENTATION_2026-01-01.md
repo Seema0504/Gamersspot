@@ -495,6 +495,7 @@ POSTGRES_URL=postgresql://postgres:[PASSWORD]@[PROD-PROJECT].pooler.supabase.com
    - **Plan Management**: Ability to view and update 5 default subscription tiers (Trial, Monthly, Quarterly, Semi-Annual, Yearly).
    - **Plan Activation Toggle**: Super Admins can now enable or disable specific plans (e.g., turn off 'Yearly') directly from the configuration UI.
    - **Enhanced Shop Creation**: Replaced manual trial day input with a dynamic dropdown to select any active subscription plan (including Free Trial) during shop creation.
+   - **Unified Subscription Management**: Updated the 'Manage Subscription' modal to fetch plans dynamically, aligning manual assignments with configured plans and auto-filling pricing/duration.
 
 #### Database Architecture (+4 Tables)
 1. **`subscription_plans`**: Defines tiers with JSON-based feature flags (`max_stations`, `max_invoices`).
