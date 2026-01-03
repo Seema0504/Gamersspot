@@ -44,6 +44,9 @@ function computeSubscriptionStatus(subscription, gracePeriodDays = 3) {
     }
 
     // Expired - check grace period
+    if (planCode === 'FREE_TRIAL') {
+        return 'expired';
+    }
     const graceEndsAt = subscription.grace_ends_at
         ? new Date(subscription.grace_ends_at)
         : new Date(expiresAt.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000);
@@ -249,20 +252,29 @@ export async function renewSubscription(shopId, newPlanCode, paymentDetails = nu
         // Create payment record if payment details provided
         let paymentId = null;
         if (paymentDetails && newPlan.price_inr > 0) {
-            const paymentResult = await db.client.query(
-                `INSERT INTO payments (
-                    shop_id, amount, payment_method, transaction_id, status, notes
-                ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-                [
-                    shopId,
-                    newPlan.price_inr,
-                    paymentDetails.method || 'MANUAL',
-                    paymentDetails.transactionId || `TXN_${Date.now()}`,
-                    'COMPLETED',
-                    paymentDetails.notes || `Subscription ${eventType}: ${newPlan.plan_name}`
-                ]
-            );
-            paymentId = paymentResult.rows[0].id;
+            if (!current || !current.id) {
+                throw new Error('Critical: Cannot link payment to subscription (Missing ID)');
+            }
+            try {
+                const paymentResult = await db.client.query(
+                    `INSERT INTO payments (
+                        shop_id, subscription_id, amount, payment_method, transaction_id, status, notes
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+                    [
+                        shopId,
+                        current.id,
+                        newPlan.price_inr,
+                        paymentDetails.method || 'MANUAL',
+                        paymentDetails.transactionId || `TXN_${Date.now()}`,
+                        'COMPLETED',
+                        paymentDetails.notes || `Subscription ${eventType}: ${newPlan.plan_name}`
+                    ]
+                );
+                paymentId = paymentResult.rows[0].id;
+            } catch (payErr) {
+                console.error('❌ Payment Insertion Error:', payErr);
+                throw new Error(`Payment failed: ${payErr.message}`);
+            }
         }
 
         // Log event

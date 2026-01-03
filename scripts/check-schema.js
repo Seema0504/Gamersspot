@@ -6,8 +6,8 @@ async function check() {
     try {
         const db = await getDbClient();
         const res = await db.client.query(`
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
+            SELECT column_name, data_type
+            FROM information_schema.columns
             WHERE table_name = 'subscriptions';
         `);
         console.log('Columns:', res.rows.map(r => r.column_name));

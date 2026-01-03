@@ -714,6 +714,34 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 - ✅ Mobile responsiveness (all screen sizes)
 - ✅ Touch target accessibility
 
+### Version 3.1 - Subscription System & UI Refinements (Current)
+
+#### 🚀 Enhancements
+1. **Subscription History & Management**:
+   - **Historical Data**: Fixed `GET /subscription-history` to query `subscription_events`, enabling full audit trail visibility in Admin Dashboard.
+   - **Manage Subscription Modal**: Aligned the "Manage Subscription" UI with the centralized "Subscription Plans" configuration. It now uses a plan dropdown that auto-fills duration and pricing, ensuring consistency.
+   - **Enhanced Shops Table**: 
+     - **Subscription Column**: Displays Plan Name and explicit expiration logic (e.g., "Expires in 25 days" or "Expired 3 days ago").
+     - **Status Column**: Now reflects the *Plan Status* (Active, Trial, Grace, Expired, Cancelled) with color-coded badges, distinct from the shop's operational status.
+
+2. **Grace Period Logic**:
+   - **Active Status**: Valid future subscriptions are marked 'Active' (or 'Trial' for Free Plans).
+   - **Grace Period**: Paid plans now have a 3-day Grace Period after expiration (`expires_at + 3 days`).
+   - **Immediate Expiry**: Free Trial plans expire immediately upon date crossing, with no grace period.
+   - **Implementation**: Logic unified across `api/admin.js` (SQL calculation) and `api/_lib/subscriptionService.js` (Core logic).
+
+3. **Shop Creation Robustness**:
+   - **Explicit Subscription Creation**: Updated `create-shop` to use an explicit `INSERT` (UPSERT) for the initial subscription row. This resolves issues where new shops showed "N/A" plan and "Expired" status due to missing subscription records.
+
+#### 🐛 Bug Fixes
+1. **Payment Renewal Error**:
+   - Fixed "Failed to renew subscription" error by adding the missing `subscription_id` to the `INSERT INTO payments` query in `subscriptionService.js`.
+   - Added robust error logging for payment insertion failures to aid future debugging.
+   - ensured `current.id` is correctly passed to the payment record.
+
+2. **Admin API Fixes**:
+   - Updated `get-subscription` endpoint to JOIN with `subscription_plans` and return standard fields (`plan_name`, `monthly_amount`, `status`), enabling the frontend to display correct current data.
+
 ---
 
 **End of Documentation**  
