@@ -865,23 +865,26 @@ const AdminDashboard = ({ onLogout, onManageShop }) => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex flex-col items-start gap-1">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${shop.plan_status === 'ACTIVE'
-                                                    ? (shop.plan_name === 'TRIAL' ? 'bg-orange-100 text-orange-800' : 'bg-purple-100 text-purple-800')
-                                                    : 'bg-gray-100 text-gray-800'
-                                                    }`}>
-                                                    {shop.plan_status === 'ACTIVE'
-                                                        ? (shop.plan_name === 'TRIAL' ? '⏳ Trial' : '✓ Premium')
-                                                        : shop.plan_status || 'Trial'}
+                                                <span className="text-sm font-semibold text-gray-900">
+                                                    {shop.plan_name || 'N/A'}
                                                 </span>
-                                                {shop.plan_end_date && (() => {
-                                                    const diffTime = new Date(shop.plan_end_date) - new Date();
-                                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                                    return (
-                                                        <span className={`text-xs ${diffDays <= 5 ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
-                                                            {diffDays < 0 ? 'Expired' : `Expires in ${diffDays} days`}
-                                                        </span>
-                                                    );
-                                                })()}
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${(shop.plan_status || '').toLowerCase() === 'active' ? 'bg-green-100 text-green-800' :
+                                                            (shop.plan_status || '').toLowerCase() === 'trial' ? 'bg-blue-100 text-blue-800' :
+                                                                'bg-gray-100 text-gray-800'
+                                                        }`}>
+                                                        {(shop.plan_status || 'UNKNOWN').toUpperCase()}
+                                                    </span>
+                                                    {shop.plan_end_date && (() => {
+                                                        const diffTime = new Date(shop.plan_end_date) - new Date();
+                                                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                                        return (
+                                                            <span className={`text-xs ${diffDays <= 5 ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                                                                {diffDays < 0 ? `Expired ${Math.abs(diffDays)} days ago` : `Expires in ${diffDays} days`}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
