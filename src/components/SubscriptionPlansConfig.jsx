@@ -22,7 +22,7 @@ export default function SubscriptionPlansConfig({ onClose }) {
     const fetchPlans = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('/api/subscriptions?action=plans', {
+            const response = await fetch('/api/admin?action=get-plans', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -101,6 +101,36 @@ export default function SubscriptionPlansConfig({ onClose }) {
         return Math.round(discount);
     };
 
+    const handleToggleActive = async (plan) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/admin?action=update-plan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    plan_code: plan.code,
+                    is_active: !plan.is_active
+                })
+            });
+
+            if (response.ok) {
+                // Optimistic update
+                setPlans(plans.map(p =>
+                    p.code === plan.code ? { ...p, is_active: !p.is_active } : p
+                ));
+            } else {
+                const error = await response.json();
+                alert('Failed to update plan status: ' + (error.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error updating plan status:', error);
+            alert('Failed to update plan status');
+        }
+    };
+
     if (loading) {
         return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -174,17 +204,28 @@ export default function SubscriptionPlansConfig({ onClose }) {
                                         className={`border-2 rounded-lg p-6 transition-all ${plan.code === 'YEARLY'
                                             ? 'border-blue-500 bg-blue-50 shadow-lg'
                                             : 'border-gray-200 hover:border-blue-300'
-                                            }`}
+                                            } ${!plan.is_active ? 'opacity-60 bg-gray-50' : ''}`}
                                     >
                                         {/* Plan Header */}
                                         <div className="mb-4">
                                             <div className="flex justify-between items-start mb-2">
                                                 <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-                                                {plan.code === 'YEARLY' && (
-                                                    <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
-                                                        BEST VALUE
-                                                    </span>
-                                                )}
+                                                <div className="flex flex-col items-end gap-2">
+                                                    {plan.code === 'YEARLY' && (
+                                                        <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
+                                                            BEST VALUE
+                                                        </span>
+                                                    )}
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={plan.is_active}
+                                                            onChange={() => handleToggleActive(plan)}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+                                                    </label>
+                                                </div>
                                             </div>
                                             <p className="text-xs text-gray-500 font-mono">{plan.code}</p>
                                         </div>

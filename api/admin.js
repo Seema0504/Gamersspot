@@ -465,10 +465,17 @@ async function handler(req, res) {
             }
         }
 
+        // GET /api/admin?action=get-plans
+        // Get all subscription plans (including inactive)
+        if (req.method === 'GET' && action === 'get-plans') {
+            const result = await client.query('SELECT * FROM subscription_plans ORDER BY display_order');
+            return res.status(200).json({ plans: result.rows });
+        }
+
         // POST /api/admin?action=update-plan
         // Update subscription plan configuration
         if (req.method === 'POST' && action === 'update-plan') {
-            const { plan_code, plan_name, duration_days, price_inr, features } = req.body;
+            const { plan_code, plan_name, duration_days, price_inr, features, is_active } = req.body;
 
             if (!plan_code) {
                 return res.status(400).json({ error: 'plan_code is required' });
@@ -513,6 +520,11 @@ async function handler(req, res) {
             if (features !== undefined) {
                 updates.push(`features = $${paramCount++}`);
                 values.push(JSON.stringify(features));
+            }
+
+            if (is_active !== undefined) {
+                updates.push(`is_active = $${paramCount++}`);
+                values.push(is_active);
             }
 
             if (updates.length === 0) {
